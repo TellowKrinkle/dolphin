@@ -440,7 +440,7 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType api_type,
 
   if (bounding_box)
   {
-    out.Write("SSBO_BINDING(0) buffer BBox {{\n");
+    out.Write("SSBO_BINDING(0) coherent buffer BBox {{\n");
 
     if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_SSBO_FIELD_ATOMICS))
     {
