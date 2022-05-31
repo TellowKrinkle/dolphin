@@ -33,6 +33,8 @@
 #include "DiscIO/Enums.h"
 #include "DiscIO/Volume.h"
 
+#include <os/signpost.h>
+
 namespace DVDThread
 {
 struct ReadRequest
@@ -267,6 +269,10 @@ void StartReadToEmulatedRAM(u32 output_address, u64 dvd_offset, u32 length,
                     ticks_until_completion);
 }
 
+static os_log_t LOG = os_log_create("Dolphin", OS_LOG_CATEGORY_POINTS_OF_INTEREST);
+
+static std::map<u64, std::pair<u32, u64>> s_req_info;
+
 static void StartReadInternal(bool copy_to_ram, u32 output_address, u64 dvd_offset, u32 length,
                               const DiscIO::Partition& partition,
                               DVDInterface::ReplyType reply_type, s64 ticks_until_completion)
@@ -283,6 +289,8 @@ static void StartReadInternal(bool copy_to_ram, u32 output_address, u64 dvd_offs
   request.reply_type = reply_type;
 
   u64 id = s_next_id++;
+  os_signpost_event_emit(LOG, OS_SIGNPOST_ID_EXCLUSIVE, "ReadReq", "Read %x bytes from %llx", length, dvd_offset);
+  s_req_info[id] = std::make_pair(length, dvd_offset);
   request.id = id;
 
   request.time_started_ticks = CoreTiming::GetTicks();
@@ -296,6 +304,16 @@ static void StartReadInternal(bool copy_to_ram, u32 output_address, u64 dvd_offs
 
 static void FinishRead(u64 id, s64 cycles_late)
 {
+  auto info_it = s_req_info.find(id);
+  u32 len = 0;
+  u64 off = 0;
+  if (info_it != s_req_info.end())
+  {
+    len = info_it->second.first;
+    off = info_it->second.second;
+    s_req_info.erase(info_it);
+  }
+  os_signpost_interval_begin(LOG, OS_SIGNPOST_ID_EXCLUSIVE, "ReadWait", "Waiting for %x bytes from %llx", len, off);
   // We can't simply pop s_result_queue and always get the ReadResult
   // we want, because the DVD thread may add ReadResults to the queue
   // in a different order than we want to get them. What we do instead
@@ -327,7 +345,7 @@ static void FinishRead(u64 id, s64 cycles_late)
     }
   }
   // We have now obtained the right ReadResult.
-
+  os_signpost_interval_end(LOG, OS_SIGNPOST_ID_EXCLUSIVE, "ReadWait");
   const ReadRequest& request = result.first;
   const std::vector<u8>& buffer = result.second;
 
@@ -378,8 +396,13 @@ static void DVDThread()
       FileMonitor::Log(*s_disc, request.partition, request.dvd_offset);
 
       std::vector<u8> buffer(request.length);
+
+      os_signpost_interval_begin(LOG, OS_SIGNPOST_ID_EXCLUSIVE, "Read", "Read %x bytes from %llx", request.length, request.dvd_offset);
+
       if (!s_disc->Read(request.dvd_offset, request.length, buffer.data(), request.partition))
         buffer.resize(0);
+
+      os_signpost_interval_end(LOG, OS_SIGNPOST_ID_EXCLUSIVE, "Read");
 
       request.realtime_done_us = Common::Timer::GetTimeUs();
 
