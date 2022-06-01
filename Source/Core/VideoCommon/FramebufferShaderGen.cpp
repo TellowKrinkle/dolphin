@@ -34,6 +34,7 @@ void EmitSamplerDeclarations(ShaderCode& code, u32 start = 0, u32 end = 1,
   switch (GetAPIType())
   {
   case APIType::D3D:
+  case APIType::Metal:
   case APIType::OpenGL:
   case APIType::Vulkan:
   {
@@ -55,6 +56,7 @@ void EmitSampleTexture(ShaderCode& code, u32 n, std::string_view coords)
   switch (GetAPIType())
   {
   case APIType::D3D:
+  case APIType::Metal:
   case APIType::OpenGL:
   case APIType::Vulkan:
     code.Write("texture(samp{}, {})", n, coords);
@@ -72,6 +74,7 @@ void EmitTextureLoad(ShaderCode& code, u32 n, std::string_view coords)
   switch (GetAPIType())
   {
   case APIType::D3D:
+  case APIType::Metal:
   case APIType::OpenGL:
   case APIType::Vulkan:
     code.Write("texelFetch(samp{}, ({}).xyz, ({}).w)", n, coords, coords);
@@ -89,6 +92,7 @@ void EmitVertexMainDeclaration(ShaderCode& code, u32 num_tex_inputs, u32 num_col
   switch (GetAPIType())
   {
   case APIType::D3D:
+  case APIType::Metal:
   case APIType::OpenGL:
   case APIType::Vulkan:
   {
@@ -138,6 +142,7 @@ void EmitPixelMainDeclaration(ShaderCode& code, u32 num_tex_inputs, u32 num_colo
   switch (GetAPIType())
   {
   case APIType::D3D:
+  case APIType::Metal:
   case APIType::OpenGL:
   case APIType::Vulkan:
   {
@@ -184,7 +189,7 @@ std::string GenerateScreenQuadVertexShader()
       "  opos = float4(v_tex0.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n");
 
   // NDC space is flipped in Vulkan. We also flip in GL so that (0,0) is in the lower-left.
-  if (GetAPIType() == APIType::Vulkan || GetAPIType() == APIType::OpenGL)
+  if (GetAPIType() == APIType::Vulkan || GetAPIType() == APIType::OpenGL || GetAPIType() == APIType::Metal)
     code.Write("  opos.y = -opos.y;\n");
 
   code.Write("}}\n");
@@ -236,7 +241,7 @@ std::string GeneratePassthroughGeometryShader(u32 num_tex, u32 num_colors)
                "  }}\n"
                "}}\n");
   }
-  else if (GetAPIType() == APIType::OpenGL || GetAPIType() == APIType::Vulkan)
+  else if (GetAPIType() == APIType::OpenGL || GetAPIType() == APIType::Vulkan || GetAPIType() == APIType::Metal)
   {
     code.Write("layout(triangles) in;\n"
                "layout(triangle_strip, max_vertices = 6) out;\n");
@@ -302,7 +307,7 @@ std::string GenerateTextureCopyVertexShader()
              "  v_tex0 = float3(src_offset + (src_size * v_tex0.xy), 0.0f);\n");
 
   // NDC space is flipped in Vulkan. We also flip in GL so that (0,0) is in the lower-left.
-  if (GetAPIType() == APIType::Vulkan || GetAPIType() == APIType::OpenGL)
+  if (GetAPIType() == APIType::Vulkan || GetAPIType() == APIType::OpenGL || GetAPIType() == APIType::Metal)
     code.Write("  opos.y = -opos.y;\n");
 
   code.Write("}}\n");

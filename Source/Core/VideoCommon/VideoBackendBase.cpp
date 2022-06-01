@@ -35,6 +35,9 @@
 #ifdef HAS_VULKAN
 #include "VideoBackends/Vulkan/VideoBackend.h"
 #endif
+#ifdef __APPLE__
+#include "VideoBackends/Metal/VideoBackend.h"
+#endif
 
 #include "VideoCommon/AsyncRequests.h"
 #include "VideoCommon/BPStructs.h"
@@ -233,6 +236,7 @@ const std::vector<std::unique_ptr<VideoBackendBase>>& VideoBackendBase::GetAvail
     if (__builtin_available(macOS 10.14, *))
     {
       backends.emplace(backends.begin(), std::make_unique<Vulkan::VideoBackend>());
+      backends.emplace(backends.begin(), std::make_unique<Metal::VideoBackend>());
     }
     else
 #endif

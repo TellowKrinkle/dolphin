@@ -49,4 +49,4 @@ endif()
 add_library(spirv_cross STATIC ${SRCS})
 
 target_compile_definitions(spirv_cross PUBLIC SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
-target_include_directories(spirv_cross PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/SPIRV-Cross/include ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(spirv_cross PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/SPIRV-Cross/include ${CMAKE_CURRENT_SOURCE_DIR}/SPIRV-Cross)
