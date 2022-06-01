@@ -349,7 +349,7 @@ void Metal::StateTracker::EndRenderPass()
 {
   if (m_current_render_encoder)
   {
-    if (m_flags.bbox_fence && m_state.bbox_download_fence)
+    if (m_flags.bbox_fence)
       [m_current_render_encoder updateFence:m_state.bbox_download_fence afterStages:MTLRenderStageFragment];
     [m_current_render_encoder endEncoding];
     m_current_render_encoder = nullptr;
