@@ -86,7 +86,7 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
   out.Write("{}", s_lighting_struct);
 
   // uniforms
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
     out.Write("UBO_BINDING(std140, 2) uniform VSBlock {{\n");
   else
     out.Write("cbuffer VSBlock {{\n");
@@ -100,7 +100,7 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
 
   WriteIsNanHeader(out, api_type);
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     out.Write("ATTRIBUTE_LOCATION({}) in float4 rawpos;\n", SHADER_POSITION_ATTRIB);
     if ((uid_data->components & VB_HAS_POSMTXIDX) != 0)
@@ -548,7 +548,7 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
               "}}\n");
   }
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     if (host_config.backend_geometry_shaders)
     {

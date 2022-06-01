@@ -39,7 +39,7 @@ static void WriteHeader(APIType api_type, ShaderCode& out)
               "  float pixel_height;\n"
               "}};\n\n");
   }
-  else if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  else if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     out.Write("UBO_BINDING(std140, 1) uniform PSBlock {{\n"
               "  float2 src_offset, src_size;\n"
@@ -61,7 +61,7 @@ ShaderCode GenerateVertexShader(APIType api_type)
     out.Write("void main(in uint id : SV_VertexID, out float3 v_tex0 : TEXCOORD0,\n"
               "          out float4 opos : SV_Position) {{\n");
   }
-  else if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  else if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
     {
@@ -109,7 +109,7 @@ ShaderCode GeneratePixelShader(APIType api_type, const UidData* uid_data)
               mono_depth ? "0.0" : "uv.z");
     out.Write("void main(in float3 v_tex0 : TEXCOORD0, out float4 ocol0 : SV_Target)\n{{\n");
   }
-  else if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  else if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n");
     out.Write("float4 SampleEFB(float3 uv, float y_offset) {{\n"

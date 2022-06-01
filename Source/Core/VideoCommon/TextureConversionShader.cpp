@@ -56,7 +56,7 @@ u16 GetEncodedSampleCount(EFBCopyFormat format)
 
 static void WriteHeader(ShaderCode& code, APIType api_type)
 {
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     // left, top, of source rectangle within source texture
     // width of the destination rectangle, scale_factor (1 or 2)
@@ -149,7 +149,7 @@ static void WriteSampleFunction(ShaderCode& code, const EFBCopyParams& params, A
         code.Write("(");
     }
 
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
       code.Write("texture(samp0, float3(");
     else
       code.Write("Tex0.Sample(samp0, float3(");
@@ -211,7 +211,7 @@ static void WriteSwizzler(ShaderCode& code, const EFBCopyParams& params, EFBCopy
   WriteHeader(code, api_type);
   WriteSampleFunction(code, params, api_type);
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     code.Write("void main()\n"
                "{{\n"

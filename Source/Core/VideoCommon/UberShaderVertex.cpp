@@ -38,7 +38,7 @@ ShaderCode GenVertexShader(APIType api_type, const ShaderHostConfig& host_config
   out.Write("{}", s_lighting_struct);
 
   // uniforms
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
     out.Write("UBO_BINDING(std140, 2) uniform VSBlock {{\n");
   else
     out.Write("cbuffer VSBlock {{\n");
@@ -53,7 +53,7 @@ ShaderCode GenVertexShader(APIType api_type, const ShaderHostConfig& host_config
   WriteBitfieldExtractHeader(out, api_type, host_config);
   WriteLightingFunction(out);
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     out.Write("ATTRIBUTE_LOCATION({}) in float4 rawpos;\n", SHADER_POSITION_ATTRIB);
     out.Write("ATTRIBUTE_LOCATION({}) in uint4 posmtx;\n", SHADER_POSMTX_ATTRIB);
@@ -335,7 +335,7 @@ ShaderCode GenVertexShader(APIType api_type, const ShaderHostConfig& host_config
               "}}\n");
   }
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     if (host_config.backend_geometry_shaders)
     {

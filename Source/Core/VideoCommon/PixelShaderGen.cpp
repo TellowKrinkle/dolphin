@@ -379,7 +379,7 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType api_type,
             "int3 iround(float3 x) {{ return int3(round(x)); }}\n"
             "int4 iround(float4 x) {{ return int4(round(x)); }}\n\n");
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp[8];\n");
   }
@@ -392,7 +392,7 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType api_type,
   }
   out.Write("\n");
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
     out.Write("UBO_BINDING(std140, 1) uniform PSBlock {{\n");
   else
     out.Write("cbuffer PSBlock : register(b0) {{\n");
@@ -445,7 +445,7 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType api_type,
   {
     out.Write("{}", s_lighting_struct);
 
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
       out.Write("UBO_BINDING(std140, 2) uniform VSBlock {{\n");
     else
       out.Write("cbuffer VSBlock : register(b1) {{\n");
@@ -548,7 +548,7 @@ void UpdateBoundingBox(float2 rawpos) {{
 
   if (host_config.manual_texture_sampling)
   {
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
     {
       out.Write(R"(
 int4 readTexture(in sampler2DArray tex, uint u, uint v, int layer, int lod) {{
@@ -634,7 +634,7 @@ uint WrapCoord(int coord, uint wrap, int size) {{
     }
   }
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     out.Write("\nint4 sampleTexture(uint texmap, in sampler2DArray tex, int2 uv, int layer) {{\n");
   }
@@ -649,7 +649,7 @@ uint WrapCoord(int coord, uint wrap, int size) {{
     out.Write("  float size_s = float(" I_TEXDIMS "[texmap].x * 128);\n"
               "  float size_t = float(" I_TEXDIMS "[texmap].y * 128);\n"
               "  float3 coords = float3(float(uv.x) / size_s, float(uv.y) / size_t, layer);\n");
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
     {
       if (!host_config.backend_sampler_lod_bias)
       {
@@ -707,7 +707,7 @@ uint WrapCoord(int coord, uint wrap, int size) {{
   int native_size_t = )" I_TEXDIMS R"([texmap].y;
 )");
 
-      if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+      if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
       {
         out.Write(R"(
   int3 size = textureSize(tex, 0);
@@ -750,7 +750,7 @@ uint WrapCoord(int coord, uint wrap, int size) {{
 )");
     }
 
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
     {
       if (g_ActiveConfig.backend_info.bSupportsCoarseDerivatives)
       {
@@ -882,7 +882,7 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
   WriteBitfieldExtractHeader(out, api_type, host_config);
   WritePixelShaderCommonHeader(out, api_type, host_config, uid_data->bounding_box);
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     out.Write("\n#define sampleTextureWrapper(texmap, uv, layer) "
               "sampleTexture(texmap, samp[texmap], uv, layer)\n");
@@ -929,7 +929,7 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
     // ARB_image_load_store extension yet.
 
     // D3D11 also has a way to force the driver to enable early-z, so we're fine here.
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
     {
       // This is a #define which signals whatever early-z method the driver supports.
       out.Write("FORCE_EARLY_Z; \n");
@@ -956,7 +956,7 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
       use_shader_blend || use_shader_logic_op ||
       DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DISCARD_WITH_EARLY_Z);
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
 #ifdef __APPLE__
     // Framebuffer fetch is only supported by Metal, so ensure that we're running Vulkan (MoltenVK)

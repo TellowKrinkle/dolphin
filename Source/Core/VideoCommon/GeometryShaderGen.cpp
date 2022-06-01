@@ -71,7 +71,7 @@ ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& 
   if (wireframe)
     vertex_out++;
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     // Insert layout parameters
     if (host_config.backend_gs_instancing)
@@ -92,7 +92,7 @@ ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& 
   out.Write("{}", s_lighting_struct);
 
   // uniforms
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
     out.Write("UBO_BINDING(std140, 3) uniform GSBlock {{\n");
   else
     out.Write("cbuffer GSBlock {{\n");
@@ -106,7 +106,7 @@ ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& 
   GenerateVSOutputMembers(out, api_type, uid_data->numTexGens, host_config, "");
   out.Write("}};\n");
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     if (host_config.backend_gs_instancing)
       out.Write("#define InstanceID gl_InvocationID\n");
@@ -156,7 +156,7 @@ ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& 
 
   if (primitive_type == PrimitiveType::Lines)
   {
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
     {
       out.Write("\tVS_OUTPUT start, end;\n");
       AssignVSOutputMembers(out, "start", "vs[0]", uid_data->numTexGens, host_config);
@@ -187,7 +187,7 @@ ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& 
   }
   else if (primitive_type == PrimitiveType::Points)
   {
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
     {
       out.Write("\tVS_OUTPUT center;\n");
       AssignVSOutputMembers(out, "center", "vs[0]", uid_data->numTexGens, host_config);
@@ -218,7 +218,7 @@ ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& 
 
   out.Write("\tfor (int i = 0; i < {}; ++i) {{\n", vertex_in);
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     out.Write("\tVS_OUTPUT f;\n");
     AssignVSOutputMembers(out, "f", "vs[i]", uid_data->numTexGens, host_config);
@@ -326,7 +326,7 @@ static void EmitVertex(ShaderCode& out, const ShaderHostConfig& host_config,
   if (wireframe && first_vertex)
     out.Write("\tif (i == 0) first = {};\n", vertex);
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     // Vulkan NDC space has Y pointing down (right-handed NDC space).
     if (api_type == APIType::Vulkan)
@@ -350,11 +350,11 @@ static void EmitVertex(ShaderCode& out, const ShaderHostConfig& host_config,
   {
     // Select the output layer
     out.Write("\tps.layer = eye;\n");
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
       out.Write("\tgl_Layer = eye;\n");
   }
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
     out.Write("\tEmitVertex();\n");
   else
     out.Write("\toutput.Append(ps);\n");
@@ -367,7 +367,7 @@ static void EndPrimitive(ShaderCode& out, const ShaderHostConfig& host_config,
   if (wireframe)
     EmitVertex(out, host_config, uid_data, "first", api_type, wireframe, stereo);
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
     out.Write("\tEndPrimitive();\n");
   else
     out.Write("\toutput.RestartStrip();\n");

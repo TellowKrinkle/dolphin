@@ -74,7 +74,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
     WriteLightingFunction(out);
 
   // Shader inputs/outputs in GLSL (HLSL is in main).
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
 #ifdef __APPLE__
     // Framebuffer fetch is only supported by Metal, so ensure that we're running Vulkan (MoltenVK)
@@ -244,7 +244,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
     // Doesn't look like DirectX supports this. Oh well the code path is here just in case it
     // supports this in the future.
     out.Write("int4 sampleTextureWrapper(uint texmap, int2 uv, int layer) {{\n");
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
       out.Write("  return sampleTexture(texmap, samp[texmap], uv, layer);\n");
     else if (api_type == APIType::D3D)
       out.Write("  return sampleTexture(texmap, tex[texmap], samp[texmap], uv, layer);\n");
@@ -260,7 +260,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
               "  switch(sampler_num) {{\n");
     for (int i = 0; i < 8; i++)
     {
-      if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+      if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
       {
         out.Write("  case {0}u: return sampleTexture({0}u, samp[{0}u], uv, layer);\n", i);
       }
@@ -523,7 +523,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
     out.Write(")\n\n");
   }
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     if (early_depth && host_config.backend_early_z)
       out.Write("FORCE_EARLY_Z;\n");
