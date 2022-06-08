@@ -349,7 +349,7 @@ void Metal::StateTracker::EndRenderPass()
 {
   if (m_current_render_encoder)
   {
-    if (m_flags.bbox_fence)
+    if (m_flags.bbox_fence && m_state.bbox_download_fence)
       [m_current_render_encoder updateFence:m_state.bbox_download_fence afterStages:MTLRenderStageFragment];
     [m_current_render_encoder endEncoding];
     m_current_render_encoder = nullptr;
@@ -697,11 +697,17 @@ void Metal::StateTracker::PrepareRender()
       m_flags.has_gx_vs_uniform = false;
       [enc setVertexBytes:m_state.utility_uniform.get() length:m_state.utility_uniform_size atIndex:1];
     }
-    if (!m_flags.has_utility_ps_uniform && pipe->UsesFragmentBuffer(0))
+    if (!m_flags.has_utility_ps_uniform && pipe->UsesFragmentBuffer(0)) // Used by SPIRV shaders
     {
       m_flags.has_utility_ps_uniform = true;
       m_flags.has_gx_ps_uniform = false;
       [enc setFragmentBytes:m_state.utility_uniform.get() length:m_state.utility_uniform_size atIndex:0];
+    }
+    if (!m_flags.has_utility_ps_uniform && pipe->UsesFragmentBuffer(1)) // Used by MSL shaderes
+    {
+      m_flags.has_utility_ps_uniform = true;
+      m_flags.has_gx_vs_uniform = false;
+      [enc setFragmentBytes:m_state.utility_uniform.get() length:m_state.utility_uniform_size atIndex:1];
     }
   }
 }

@@ -34,6 +34,97 @@ bool InitializeGlslang();
 // Resource limits used when compiling shaders
 static const TBuiltInResource* GetCompilerResourceLimits();
 
+static const char SHARED_SHADER_HEADER[] = R"(
+  #define INPUT_DECL_BEGIN
+  #define INPUT_DECL_END
+  #define VERTEX_INPUT_DECL_BEGIN
+  #define VERTEX_INPUT_DECL_END
+  #define PIXEL_OUTPUT_DECL_BEGIN
+  #define PIXEL_OUTPUT_DECL_END
+
+  #if HAS_GEOMETRY_SHADERS
+    #define VERTEX_OUTPUT_DECL_BEGIN layout(location = 0) out VertexData {
+    #define VERTEX_OUTPUT_DECL_END };
+    #define PIXEL_INPUT_DECL_BEGIN layout(location = 0) in VertexData {
+    #define PIXEL_INPUT_DECL_END };
+    #define DECL_VERTEX_OUTPUT(type, name, semantic, binding) type name;
+    #define DECL_PIXEL_INPUT(type, name, semantic, binding) type name;
+  #else
+    #define VERTEX_OUTPUT_DECL_BEGIN
+    #define VERTEX_OUTPUT_DECL_END
+    #define PIXEL_INPUT_DECL_BEGIN
+    #define PIXEL_INPUT_DECL_END
+    #define DECL_VERTEX_OUTPUT(type, name, semantic, binding) layout(location = binding) out type name;
+    #define DECL_PIXEL_INPUT(type, name, semantic, binding) layout(location = binding) in type name;
+  #endif
+
+  #define DECL_CB_PS layout(std140, set = 0, binding = 0) uniform PSBlock
+  #define DECL_CB_VS layout(std140, set = 0, binding = 1) uniform VSBlock
+  #define DECL_CB_UTILITY layout(std140, set = 0, binding = 0) uniform UtilityBlock
+  #define DECL_INPUT_CB_PS
+  #define DECL_INPUT_CB_VS
+  #define DECL_INPUT_CB_UTILITY
+  #define DECL_INPUT_TEXTURE(name, bind) \
+    layout(set = 1, binding = bind) uniform sampler2DArray name;
+  #define DECL_INPUT_TEXTURE_ARRAY(name, bind, length) \
+    layout(set = 1, binding = bind) uniform sampler2DArray name[length];
+  #define DECL_INPUT_TEXTURE_MS(name, bind) \
+    layout(set = 1, binding = bind) uniform sampler2DMSArray name;
+  #define DECL_INPUT_DEPTH(name, bind) DECL_INPUT_TEXTURE(name, bind)
+  #define DECL_INPUT_DEPTH_MS(name, bind) DECL_INPUT_TEXTURE_MS(name, bind)
+  #define DECL_INPUT_SAMPLER(name, binding)
+  #define DECL_INPUT_SAMPLER_ARRAY(name, binding, length)
+  #define DECL_INPUT_TEXEL_BUFFER(type, name, bind) \
+    layout(set = 1, binding = (bind + 8)) uniform usamplerBuffer name;
+  #define DECL_VERTEX_INPUT(type, name, semantic, bind) layout(location = bind) in type name;
+  #define DECL_VERTEX_INPUT_VID
+  #define DECL_VERTEX_OUTPUT_POSITION
+  #define DECL_VERTEX_OUTPUT_CLIPDIST
+  #define DECL_VERTEX_OUTPUT_POINT_SIZE
+  #define DECL_PIXEL_INPUT_POSITION
+  #define DECL_PIXEL_INPUT_CLIPDIST
+  #define DECL_PIXEL_INPUT_SAMPLE_IDX
+  #define DECL_PIXEL_INPUT_ARRAY_IDX(name) flat int layer;
+  #define DECL_PIXEL_OUTPUT_COLOR0(type) layout(location = 0, index = 0) out type ocol0;
+  #define DECL_PIXEL_OUTPUT_DEPTH
+
+  #define DECL_MAIN void main()
+
+  #define IN(type) in type
+  #define INOUT(type) inout type
+  #define TEX(member) member
+  #define INPUT(member) member
+  #define OUTPUT(member) member
+  #define vid gl_VertexID
+  #define opos gl_Position
+  #define odepth gl_FragDepth
+  #define oclipDist0 gl_ClipDistance[0]
+  #define oclipDist1 gl_ClipDistance[1]
+  #define frag_coord gl_FragCoord
+  #define odepth gl_FragDepth
+  #define TEXTURE_SAMPLE(tex, sampler, coords) texture(tex, coords)
+  #define TEXTURE_SAMPLE_OFFSET(tex, sampler, coords, offset) textureOffset(tex, coords, offset)
+  #define TEXTURE_SAMPLE_LAYER(tex, sampler, coords, layer) texture(tex, float3(coords, float(layer)))
+  #define TEXTURE_SAMPLE_LAYER_BIAS(tex, sampler, coords, layer, bias) texture(tex, float3(coords, float(layer)), bias)
+  #define TEXTURE_FETCH(tex, coords, layer) texelFetch(tex, int3(coords, layer), 0)
+  #define TEXTURE_FETCH_LOD(tex, coords, layer, lod) texelFetch(tex, int3(coords, layer), lod)
+  #define TEXTURE_FETCH_MS(tex, coords, layer, sample) texelFetch(tex, int3(coords, layer), sample)
+  #define DEPTH_SAMPLE(tex, sampler, coords) texture(tex, coords)
+  #define DEPTH_FETCH_MS(tex, coords, layer, sample) texelFetch(tex, int3(coords, layer), sample)
+  #define TEXEL_BUFFER_FETCH_1(tex, index, offset) texelFetch(tex, index + offset).r
+  #define CB_PS(member) member
+  #define CB_VS(member) member
+  #define CB_UTILITY(member) member
+
+  #define UNREACHABLE
+  #define MAYBE_UNUSED
+  #define BOOL bool
+  #define packed_float3 float3
+
+  #define FIXUP_OPOS opos.y = -opos.y
+  #define FIXUP_OPOS_VK FIXUP_OPOS
+)";
+
 // Regarding the UBO bind points, we subtract one from the binding index because
 // the OpenGL backend requires UBO #0 for non-block uniforms (at least on NV).
 // This allows us to share the same shaders but use bind point #0 in the Vulkan
@@ -137,6 +228,11 @@ static std::optional<SPIRVCodeVector> CompileShaderToSPV(EShLanguage stage,
     full_source_code.append(header);
     if (g_vulkan_context->SupportsShaderSubgroupOperations())
       full_source_code.append(SUBGROUP_HELPER_HEADER, subgroup_helper_header_length);
+    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
+      full_source_code.append("  #define HAS_GEOMETRY_SHADERS 1\n");
+    else
+      full_source_code.append("  #define HAS_GEOMETRY_SHADERS 0\n");
+    full_source_code.append(SHARED_SHADER_HEADER);
     full_source_code.append(source);
     pass_source_code = full_source_code.c_str();
     pass_source_code_length = static_cast<int>(full_source_code.length());

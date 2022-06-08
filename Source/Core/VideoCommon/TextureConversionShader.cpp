@@ -56,67 +56,48 @@ u16 GetEncodedSampleCount(EFBCopyFormat format)
 
 static void WriteHeader(ShaderCode& code, APIType api_type)
 {
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
-  {
-    // left, top, of source rectangle within source texture
-    // width of the destination rectangle, scale_factor (1 or 2)
-    code.Write("UBO_BINDING(std140, 1) uniform PSBlock {{\n"
-               "  int4 position;\n"
-               "  float y_scale;\n"
-               "  float gamma_rcp;\n"
-               "  float2 clamp_tb;\n"
-               "  float3 filter_coefficients;\n"
-               "}};\n");
-    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
-    {
-      code.Write("VARYING_LOCATION(0) in VertexData {{\n"
-                 "  float3 v_tex0;\n"
-                 "}};\n");
-    }
-    else
-    {
-      code.Write("VARYING_LOCATION(0) in float3 v_tex0;\n");
-    }
-    code.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n"
-               "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n");
-  }
-  else  // D3D
-  {
-    code.Write("cbuffer PSBlock : register(b0) {{\n"
-               "  int4 position;\n"
-               "  float y_scale;\n"
-               "  float gamma_rcp;\n"
-               "  float2 clamp_tb;\n"
-               "  float3 filter_coefficients;\n"
-               "}};\n"
-               "sampler samp0 : register(s0);\n"
-               "Texture2DArray Tex0 : register(t0);\n");
-  }
+  code.Write(R"(
+// SHADER_SUPPORTS_MSL
+DECL_CB_UTILITY
+{{
+  int4 position;
+  float y_scale;
+  float gamma_rcp;
+  float2 clamp_tb;
+  float3 filter_coefficients;
+}};
+INPUT_DECL_BEGIN
+  DECL_INPUT_CB_UTILITY
+  DECL_INPUT_TEXTURE(tex0, 0)
+  DECL_INPUT_SAMPLER(samp0, 0)
+INPUT_DECL_END
+PIXEL_INPUT_DECL_BEGIN
+  DECL_PIXEL_INPUT_POSITION
+  DECL_PIXEL_INPUT(float3, v_tex0, TEXCOORD0, 0)
+PIXEL_INPUT_DECL_END
+PIXEL_OUTPUT_DECL_BEGIN
+  DECL_PIXEL_OUTPUT_COLOR0(float4)
+PIXEL_OUTPUT_DECL_END
 
-  // D3D does not have roundEven(), only round(), which is specified "to the nearest integer".
-  // This differs from the roundEven() behavior, but to get consistency across drivers in OpenGL
-  // we need to use roundEven().
-  if (api_type == APIType::D3D)
-    code.Write("#define roundEven(x) round(x)\n");
+// Alpha channel in the copy is set to 1 if the EFB format does not have an alpha channel.
+float4 RGBA8ToRGB8(float4 src)
+{{
+  return float4(src.xyz, 1.0);
+}}
 
-  // Alpha channel in the copy is set to 1 the EFB format does not have an alpha channel.
-  code.Write("float4 RGBA8ToRGB8(float4 src)\n"
-             "{{\n"
-             "  return float4(src.xyz, 1.0);\n"
-             "}}\n"
+float4 RGBA8ToRGBA6(float4 src)
+{{
+  int4 val = int4(roundEven(src * 255.0)) >> 2;
+  return float4(val) / 63.0;
+}}
 
-             "float4 RGBA8ToRGBA6(float4 src)\n"
-             "{{\n"
-             "  int4 val = int4(roundEven(src * 255.0)) >> 2;\n"
-             "  return float4(val) / 63.0;\n"
-             "}}\n"
-
-             "float4 RGBA8ToRGB565(float4 src)\n"
-             "{{\n"
-             "  int4 val = int4(roundEven(src * 255.0));\n"
-             "  val = int4(val.r >> 3, val.g >> 2, val.b >> 3, 1);\n"
-             "  return float4(val) / float4(31.0, 63.0, 31.0, 1.0);\n"
-             "}}\n");
+float4 RGBA8ToRGB565(float4 src)
+{{
+  int4 val = int4(roundEven(src * 255.0));
+  val = int4(val.r >> 3, val.g >> 2, val.b >> 3, 1);
+  return float4(val) / float4(31.0, 63.0, 31.0, 1.0);
+}}
+)");
 }
 
 static void WriteSampleFunction(ShaderCode& code, const EFBCopyParams& params, APIType api_type)
@@ -149,27 +130,26 @@ static void WriteSampleFunction(ShaderCode& code, const EFBCopyParams& params, A
         code.Write("(");
     }
 
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
-      code.Write("texture(samp0, float3(");
-    else
-      code.Write("Tex0.Sample(samp0, float3(");
-
-    code.Write("uv.x + float(xoffset) * pixel_size.x, ");
+    code.Write("TEXTURE_SAMPLE_LAYER(tex0, samp0, float2(uv.x + float(xoffset) * pixel_size.x, ");
 
     // Reverse the direction for OpenGL, since positive numbers are distance from the bottom row.
     if (yoffset != 0)
     {
       if (api_type == APIType::OpenGL)
-        code.Write("clamp(uv.y - float({}) * pixel_size.y, clamp_tb.x, clamp_tb.y)", yoffset);
+        code.Write("clamp(uv.y - float({}) * pixel_size.y, "
+                   "CB_UTILITY(clamp_tb.x), CB_UTILITY(clamp_tb.y))",
+                   yoffset);
       else
-        code.Write("clamp(uv.y + float({}) * pixel_size.y, clamp_tb.x, clamp_tb.y)", yoffset);
+        code.Write("clamp(uv.y + float({}) * pixel_size.y, "
+                   "CB_UTILITY(clamp_tb.x), CB_UTILITY(clamp_tb.y))",
+                   yoffset);
     }
     else
     {
       code.Write("uv.y");
     }
 
-    code.Write(", 0.0)))");
+    code.Write("), 0))");
   };
 
   // The copy filter applies to both color and depth copies. This has been verified on hardware.
@@ -187,9 +167,9 @@ static void WriteSampleFunction(ShaderCode& code, const EFBCopyParams& params, A
                "  float4 next_row = ");
     WriteSampleOp(1);
     code.Write(";\n"
-               "  return float4(min(prev_row.rgb * filter_coefficients[0] +\n"
-               "                      current_row.rgb * filter_coefficients[1] +\n"
-               "                      next_row.rgb * filter_coefficients[2], \n"
+               "  return float4(min(prev_row.rgb * CB_UTILITY(filter_coefficients[0]) +\n"
+               "                      current_row.rgb * CB_UTILITY(filter_coefficients[1]) +\n"
+               "                      next_row.rgb * CB_UTILITY(filter_coefficients[2]), \n"
                "                    float3(1, 1, 1)), current_row.a);\n");
   }
   else
@@ -197,7 +177,8 @@ static void WriteSampleFunction(ShaderCode& code, const EFBCopyParams& params, A
     code.Write("  float4 current_row = ");
     WriteSampleOp(0);
     code.Write(";\n"
-               "return float4(min(current_row.rgb * filter_coefficients[1], float3(1, 1, 1)),\n"
+               "return float4(min(current_row.rgb * CB_UTILITY(filter_coefficients[1]),\n"
+               "                  float3(1, 1, 1)),"
                "              current_row.a);\n");
   }
   code.Write("}}\n");
@@ -211,30 +192,17 @@ static void WriteSwizzler(ShaderCode& code, const EFBCopyParams& params, EFBCopy
   WriteHeader(code, api_type);
   WriteSampleFunction(code, params, api_type);
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
-  {
-    code.Write("void main()\n"
-               "{{\n"
-               "  int2 sampleUv;\n"
-               "  int2 uv1 = int2(gl_FragCoord.xy);\n");
-  }
-  else  // D3D
-  {
-    code.Write("void main(\n"
-               "  in float3 v_tex0 : TEXCOORD0,\n"
-               "  in float4 rawpos : SV_Position,\n"
-               "  out float4 ocol0 : SV_Target)\n"
-               "{{\n"
-               "  int2 sampleUv;\n"
-               "  int2 uv1 = int2(rawpos.xy);\n");
-  }
+  code.Write("DECL_MAIN\n"
+             "{{\n"
+             "  int2 sampleUv;\n"
+             "  int2 uv1 = int2(frag_coord.xy);\n");
 
   const int blkW = TexDecoder_GetEFBCopyBlockWidthInTexels(format);
   const int blkH = TexDecoder_GetEFBCopyBlockHeightInTexels(format);
   int samples = GetEncodedSampleCount(format);
 
-  code.Write("  int x_block_position = (uv1.x >> {}) << {};\n", IntLog2(blkH * blkW / samples),
-             IntLog2(blkW));
+  code.Write("  int x_block_position = (uv1.x >> {}) << {};\n",
+             IntLog2(blkH * blkW / samples), IntLog2(blkW));
   code.Write("  int y_block_position = uv1.y << {};\n", IntLog2(blkH));
   if (samples == 1)
   {
@@ -244,8 +212,8 @@ static void WriteSwizzler(ShaderCode& code, const EFBCopyParams& params, EFBCopy
   }
   code.Write("  int offset_in_block = uv1.x & {};\n", (blkH * blkW / samples) - 1);
   code.Write("  int y_offset_in_block = offset_in_block >> {};\n", IntLog2(blkW / samples));
-  code.Write("  int x_offset_in_block = (offset_in_block & {}) << {};\n", (blkW / samples) - 1,
-             IntLog2(samples));
+  code.Write("  int x_offset_in_block = (offset_in_block & {}) << {};\n",
+             (blkW / samples) - 1, IntLog2(samples));
 
   code.Write("  sampleUv.x = x_block_position + x_offset_in_block;\n"
              "  sampleUv.y = y_block_position + y_offset_in_block;\n");
@@ -257,22 +225,23 @@ static void WriteSwizzler(ShaderCode& code, const EFBCopyParams& params, EFBCopy
   // Scale by two if needed (also move to pixel borders
   // so that linear filtering will average adjacent
   // pixel)
-  code.Write("  uv0 *= float(position.w);\n");
+  code.Write("  uv0 *= float(CB_UTILITY(position.w));\n");
 
   // Move to copied rect
-  code.Write("  uv0 += float2(position.xy);\n");
+  code.Write("  uv0 += float2(CB_UTILITY(position.xy));\n");
   // Normalize to [0:1]
   code.Write("  uv0 /= float2({}, {});\n", EFB_WIDTH, EFB_HEIGHT);
   // Apply the y scaling
-  code.Write("  uv0 /= float2(1, y_scale);\n");
+  code.Write("  uv0 /= float2(1, CB_UTILITY(y_scale));\n");
   // OGL has to flip up and down
   if (api_type == APIType::OpenGL)
   {
     code.Write("  uv0.y = 1.0-uv0.y;\n");
   }
 
-  code.Write("  float2 pixel_size = float2(position.w, position.w) / float2({}, {});\n", EFB_WIDTH,
-             EFB_HEIGHT);
+  code.Write("  float2 pixel_size = float2(CB_UTILITY(position.w), CB_UTILITY(position.w))\n"
+             "                    / float2({}, {});",
+             EFB_WIDTH, EFB_HEIGHT);
 }
 
 static void WriteSampleColor(ShaderCode& code, std::string_view color_comp, std::string_view dest,
@@ -749,8 +718,9 @@ static void WriteXFBEncoder(ShaderCode& code, APIType api_type, const EFBCopyPar
   WriteSampleColor(code, "rgb", "color1", 1, api_type, params);
 
   // Gamma is only applied to XFB copies.
-  code.Write("  color0 = pow(color0, float3(gamma_rcp, gamma_rcp, gamma_rcp));\n"
-             "  color1 = pow(color1, float3(gamma_rcp, gamma_rcp, gamma_rcp));\n");
+  code.Write(
+             "  color0 = pow(color0, CB_UTILITY(gamma_rcp));\n"
+             "  color1 = pow(color1, CB_UTILITY(gamma_rcp));\n");
 
   // Convert to YUV.
   code.Write("  const float3 y_const = float3(0.257, 0.504, 0.098);\n"
@@ -1491,55 +1461,37 @@ float4 DecodePixel(int val)
     break;
   }
 
-  ss << "\n";
+  ss << R"(
+// SHADER_SUPPORTS_MSL
+DECL_CB_UTILITY
+{
+  float multiplier;
+  int texel_buffer_offset;
+};
 
-  if (api_type == APIType::D3D)
-  {
-    ss << "Buffer<uint> tex0 : register(t0);\n";
-    ss << "Texture2DArray tex1 : register(t1);\n";
-    ss << "SamplerState samp1 : register(s1);\n";
-    ss << "cbuffer PSBlock : register(b0) {\n";
-  }
-  else
-  {
-    ss << "TEXEL_BUFFER_BINDING(0) uniform usamplerBuffer samp0;\n";
-    ss << "SAMPLER_BINDING(1) uniform sampler2DArray samp1;\n";
-    ss << "UBO_BINDING(std140, 1) uniform PSBlock {\n";
-  }
+INPUT_DECL_BEGIN
+  DECL_INPUT_CB_UTILITY
+  DECL_INPUT_TEXEL_BUFFER(ushort, tex0, 0)
+  DECL_INPUT_TEXTURE(tex1, 1)
+  DECL_INPUT_SAMPLER(samp1, 1)
+INPUT_DECL_END
 
-  ss << "  float multiplier;\n";
-  ss << "  int texel_buffer_offset;\n";
-  ss << "};\n";
+PIXEL_INPUT_DECL_BEGIN
+  DECL_PIXEL_INPUT(float3, v_tex0, TEXCOORD0, 0)
+PIXEL_INPUT_DECL_END
 
-  if (api_type == APIType::D3D)
-  {
-    ss << "void main(in float3 v_tex0 : TEXCOORD0, out float4 ocol0 : SV_Target) {\n";
-    ss << "  int src = int(round(tex1.Sample(samp1, v_tex0).r * multiplier));\n";
-    ss << "  src = int(tex0.Load(src + texel_buffer_offset).r);\n";
-  }
-  else
-  {
-    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
-    {
-      ss << "VARYING_LOCATION(0) in VertexData {\n";
-      ss << "  float3 v_tex0;\n";
-      ss << "};\n";
-    }
-    else
-    {
-      ss << "VARYING_LOCATION(0) in float3 v_tex0;\n";
-    }
-    ss << "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n";
-    ss << "void main() {\n";
-    ss << "  float3 coords = v_tex0;\n";
-    ss << "  int src = int(round(texture(samp1, coords).r * multiplier));\n";
-    ss << "  src = int(texelFetch(samp0, src + texel_buffer_offset).r);\n";
-  }
+PIXEL_OUTPUT_DECL_BEGIN
+  DECL_PIXEL_OUTPUT_COLOR0(float4)
+PIXEL_OUTPUT_DECL_END
 
-  ss << "  src = ((src << 8) & 0xFF00) | (src >> 8);\n";
-  ss << "  ocol0 = DecodePixel(src);\n";
-  ss << "}\n";
-
+DECL_MAIN
+{
+  int src = int(round(TEXTURE_SAMPLE(tex1, samp1, INPUT(v_tex0)).r * CB_UTILITY(multiplier)));
+  src = int(TEXEL_BUFFER_FETCH_1(tex0, src, texel_buffer_offset));
+  src = ((src << 8) & 0xFF00) | (src >> 8);
+  ocol0 = DecodePixel(src);
+}
+)";
   return ss.str();
 }
 

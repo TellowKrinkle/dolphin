@@ -47,7 +47,7 @@ static inline bool HasStencil(AbstractTextureFormat format)
   return format == AbstractTextureFormat::D24_S8 || format == AbstractTextureFormat::D32F_S8;
 }
 
-std::string CompileShader(ShaderStage stage, std::string_view source);
+std::string PrepareMSLShader(ShaderStage stage, std::string_view source);
 
 } // namespace Util
 } // namespace Metal

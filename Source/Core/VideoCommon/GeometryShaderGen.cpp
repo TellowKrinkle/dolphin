@@ -113,12 +113,12 @@ ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& 
 
     out.Write("VARYING_LOCATION(0) in VertexData {{\n");
     GenerateVSOutputMembers(out, api_type, uid_data->numTexGens, host_config,
-                            GetInterpolationQualifier(msaa, ssaa, true, true));
+                            GetInterpolationQualifier(api_type, msaa, ssaa, true, true));
     out.Write("}} vs[{}];\n", vertex_in);
 
     out.Write("VARYING_LOCATION(0) out VertexData {{\n");
     GenerateVSOutputMembers(out, api_type, uid_data->numTexGens, host_config,
-                            GetInterpolationQualifier(msaa, ssaa, true, false));
+                            GetInterpolationQualifier(api_type, msaa, ssaa, true, false));
 
     if (stereo)
       out.Write("\tflat int layer;\n");

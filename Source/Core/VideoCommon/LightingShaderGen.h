@@ -8,19 +8,19 @@
 
 class ShaderCode;
 
-#define LIGHT_COL "{}[{}].color.{}"
+#define LIGHT_COL "CB_VS({})[{}].color.{}"
 #define LIGHT_COL_PARAMS(index, swizzle) (I_LIGHTS), (index), (swizzle)
 
-#define LIGHT_COSATT "{}[{}].cosatt"
+#define LIGHT_COSATT "CB_VS({})[{}].cosatt"
 #define LIGHT_COSATT_PARAMS(index) (I_LIGHTS), (index)
 
-#define LIGHT_DISTATT "{}[{}].distatt"
+#define LIGHT_DISTATT "CB_VS({})[{}].distatt"
 #define LIGHT_DISTATT_PARAMS(index) (I_LIGHTS), (index)
 
-#define LIGHT_POS "{}[{}].pos"
+#define LIGHT_POS "CB_VS({})[{}].pos"
 #define LIGHT_POS_PARAMS(index) (I_LIGHTS), (index)
 
-#define LIGHT_DIR "{}[{}].dir"
+#define LIGHT_DIR "CB_VS({})[{}].dir"
 #define LIGHT_DIR_PARAMS(index) (I_LIGHTS), (index)
 
 /**
@@ -37,13 +37,14 @@ struct LightingUidData
 };
 
 constexpr char s_lighting_struct[] = "struct Light {\n"
-                                     "\tint4 color;\n"
-                                     "\tfloat4 cosatt;\n"
-                                     "\tfloat4 distatt;\n"
-                                     "\tfloat4 pos;\n"
-                                     "\tfloat4 dir;\n"
+                                     "  int4 color;\n"
+                                     "  float4 cosatt;\n"
+                                     "  float4 distatt;\n"
+                                     "  float4 pos;\n"
+                                     "  float4 dir;\n"
                                      "};\n";
 
 void GenerateLightingShaderCode(ShaderCode& object, const LightingUidData& uid_data,
-                                std::string_view in_color_name, std::string_view dest);
+                                std::string_view in_color_name0, std::string_view in_color_name1,
+                                std::string_view dest0, std::string_view dest1);
 void GetLightingShaderUid(LightingUidData& uid_data);

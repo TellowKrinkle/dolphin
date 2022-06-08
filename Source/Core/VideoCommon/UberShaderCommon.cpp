@@ -17,38 +17,38 @@ void WriteLightingFunction(ShaderCode& out)
   // ==============================================
   out.Write("int4 CalculateLighting(uint index, uint attnfunc, uint diffusefunc, float3 pos, "
             "float3 normal) {{\n"
-            "  float3 ldir, h, cosAttn, distAttn;\n"
+            "  float3 ldir, cosAttn, distAttn;\n"
             "  float dist, dist2, attn;\n"
             "\n"
             "  switch (attnfunc) {{\n");
   out.Write("  case {:s}:\n", AttenuationFunc::None);
   out.Write("  case {:s}:\n", AttenuationFunc::Dir);
-  out.Write("    ldir = normalize(" I_LIGHTS "[index].pos.xyz - pos.xyz);\n"
+  out.Write("    ldir = normalize(CB_VS(" I_LIGHTS ")[index].pos.xyz - pos.xyz);\n"
             "    attn = 1.0;\n"
             "    if (length(ldir) == 0.0)\n"
             "      ldir = normal;\n"
             "    break;\n\n");
   out.Write("  case {:s}:\n", AttenuationFunc::Spec);
-  out.Write("    ldir = normalize(" I_LIGHTS "[index].pos.xyz - pos.xyz);\n"
-            "    attn = (dot(normal, ldir) >= 0.0) ? max(0.0, dot(normal, " I_LIGHTS
-            "[index].dir.xyz)) : 0.0;\n"
-            "    cosAttn = " I_LIGHTS "[index].cosatt.xyz;\n");
+  out.Write("    ldir = normalize(CB_VS(" I_LIGHTS ")[index].pos.xyz - pos.xyz);\n"
+            "    attn = (dot(normal, ldir) >= 0.0) ? max(0.0, dot(normal, CB_VS(" I_LIGHTS
+            ")[index].dir.xyz)) : 0.0;\n"
+            "    cosAttn = CB_VS(" I_LIGHTS ")[index].cosatt.xyz;\n");
   out.Write("    if (diffusefunc == {:s})\n", DiffuseFunc::None);
-  out.Write("      distAttn = " I_LIGHTS "[index].distatt.xyz;\n"
+  out.Write("      distAttn = CB_VS(" I_LIGHTS ")[index].distatt.xyz;\n"
             "    else\n"
-            "      distAttn = normalize(" I_LIGHTS "[index].distatt.xyz);\n"
+            "      distAttn = normalize(CB_VS(" I_LIGHTS ")[index].distatt.xyz);\n"
             "    attn = max(0.0, dot(cosAttn, float3(1.0, attn, attn*attn))) / dot(distAttn, "
             "float3(1.0, attn, attn*attn));\n"
             "    break;\n\n");
   out.Write("  case {:s}:\n", AttenuationFunc::Spot);
-  out.Write("    ldir = " I_LIGHTS "[index].pos.xyz - pos.xyz;\n"
+  out.Write("    ldir = CB_VS(" I_LIGHTS ")[index].pos.xyz - pos.xyz;\n"
             "    dist2 = dot(ldir, ldir);\n"
             "    dist = sqrt(dist2);\n"
             "    ldir = ldir / dist;\n"
-            "    attn = max(0.0, dot(ldir, " I_LIGHTS "[index].dir.xyz));\n"
-            "    attn = max(0.0, " I_LIGHTS "[index].cosatt.x + " I_LIGHTS
-            "[index].cosatt.y * attn + " I_LIGHTS "[index].cosatt.z * attn * attn) / dot(" I_LIGHTS
-            "[index].distatt.xyz, float3(1.0, dist, dist2));\n"
+            "    attn = max(0.0, dot(ldir, CB_VS(" I_LIGHTS ")[index].dir.xyz));\n"
+            "    attn = max(0.0, CB_VS(" I_LIGHTS ")[index].cosatt.x + CB_VS(" I_LIGHTS
+            ")[index].cosatt.y * attn + CB_VS(" I_LIGHTS ")[index].cosatt.z * attn * attn) / "
+            "dot(CB_VS(" I_LIGHTS ")[index].distatt.xyz, float3(1.0, dist, dist2));\n"
             "    break;\n\n");
   out.Write("  default:\n"
             "    attn = 1.0;\n"
@@ -58,30 +58,30 @@ void WriteLightingFunction(ShaderCode& out)
             "\n"
             "  switch (diffusefunc) {{\n");
   out.Write("  case {:s}:\n", DiffuseFunc::None);
-  out.Write("    return int4(round(attn * float4(" I_LIGHTS "[index].color)));\n\n");
+  out.Write("    return int4(round(attn * float4(CB_VS(" I_LIGHTS ")[index].color)));\n\n");
   out.Write("  case {:s}:\n", DiffuseFunc::Sign);
-  out.Write("    return int4(round(attn * dot(ldir, normal) * float4(" I_LIGHTS
-            "[index].color)));\n\n");
+  out.Write("    return int4(round(attn * dot(ldir, normal) * float4(CB_VS(" I_LIGHTS
+            ")[index].color)));\n\n");
   out.Write("  case {:s}:\n", DiffuseFunc::Clamp);
-  out.Write("    return int4(round(attn * max(0.0, dot(ldir, normal)) * float4(" I_LIGHTS
-            "[index].color)));\n\n");
+  out.Write("    return int4(round(attn * max(0.0, dot(ldir, normal)) * float4(CB_VS(" I_LIGHTS
+            ")[index].color)));\n\n");
   out.Write("  default:\n"
             "    return int4(0, 0, 0, 0);\n"
             "  }}\n"
             "}}\n\n");
 }
 
-void WriteVertexLighting(ShaderCode& out, APIType api_type, std::string_view world_pos_var,
-                         std::string_view normal_var, std::string_view in_color_0_var,
-                         std::string_view in_color_1_var, std::string_view out_color_0_var,
-                         std::string_view out_color_1_var)
+void WriteVertexLighting(ShaderCode& out, APIType api_type,
+                         std::string_view world_pos_var,   std::string_view normal_var,
+                         std::string_view in_color_0_var,  std::string_view in_color_1_var,
+                         std::string_view out_color_0_var, std::string_view out_color_1_var)
 {
   out.Write("// Lighting\n");
   out.Write("{}for (uint chan = 0u; chan < {}u; chan++) {{\n",
             api_type == APIType::D3D ? "[loop] " : "", NUM_XF_COLOR_CHANNELS);
   out.Write("  uint colorreg = xfmem_color(chan);\n"
             "  uint alphareg = xfmem_alpha(chan);\n"
-            "  int4 mat = " I_MATERIALS "[chan + 2u]; \n"
+            "  int4 mat = CB_VS(" I_MATERIALS ")[chan + 2u]; \n"
             "  int4 lacc = int4(255, 255, 255, 255);\n"
             "\n");
 
@@ -93,7 +93,7 @@ void WriteVertexLighting(ShaderCode& out, APIType api_type, std::string_view wor
   out.Write("    mat.w = int(round(((chan == 0u) ? {}.w : {}.w) * 255.0));\n", in_color_0_var,
             in_color_1_var);
   out.Write("  else\n"
-            "    mat.w = " I_MATERIALS " [chan + 2u].w;\n"
+            "    mat.w = CB_VS(" I_MATERIALS ")[chan + 2u].w;\n"
             "\n");
 
   out.Write("  if ({} != 0u) {{\n", BitfieldExtract<&LitChannel::enablelighting>("colorreg"));
@@ -101,7 +101,7 @@ void WriteVertexLighting(ShaderCode& out, APIType api_type, std::string_view wor
   out.Write("      lacc.xyz = int3(round(((chan == 0u) ? {}.xyz : {}.xyz) * 255.0));\n",
             in_color_0_var, in_color_1_var);
   out.Write("    else\n"
-            "      lacc.xyz = " I_MATERIALS " [chan].xyz;\n"
+            "      lacc.xyz = CB_VS(" I_MATERIALS ")[chan].xyz;\n"
             "\n");
   out.Write("    uint light_mask = {} | ({} << 4u);\n",
             BitfieldExtract<&LitChannel::lightMask0_3>("colorreg"),
@@ -119,15 +119,15 @@ void WriteVertexLighting(ShaderCode& out, APIType api_type, std::string_view wor
 
   out.Write("  if ({} != 0u) {{\n", BitfieldExtract<&LitChannel::enablelighting>("alphareg"));
   out.Write("    if ({} != 0u) {{\n", BitfieldExtract<&LitChannel::ambsource>("alphareg"));
-  out.Write("      if ((components & ({}u << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
+  out.Write("      if ((CB_VS(components) & ({}u << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("        lacc.w = int(round(((chan == 0u) ? {}.w : {}.w) * 255.0));\n", in_color_0_var,
             in_color_1_var);
-  out.Write("      else if ((components & {}u) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
+  out.Write("      else if ((CB_VS(components) & {}u) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
   out.Write("        lacc.w = int(round({}.w * 255.0));\n", in_color_0_var);
   out.Write("      else\n"
             "        lacc.w = 255;\n"
             "    }} else {{\n"
-            "      lacc.w = " I_MATERIALS " [chan].w;\n"
+            "      lacc.w = CB_VS(" I_MATERIALS ")[chan].w;\n"
             "    }}\n"
             "\n");
   out.Write("    uint light_mask = {} | ({} << 4u);\n",

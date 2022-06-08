@@ -191,6 +191,10 @@ void WriteBitfieldExtractHeader(ShaderCode& out, APIType api_type,
 void GenerateVSOutputMembers(ShaderCode& object, APIType api_type, u32 texgens,
                              const ShaderHostConfig& host_config, std::string_view qualifier);
 
+void GenerateVSOutputMembers(ShaderCode& object, u32 texgens,
+                             const ShaderHostConfig& host_config, std::string_view qualifier,
+                             std::string_view location);
+
 void AssignVSOutputMembers(ShaderCode& object, std::string_view a, std::string_view b, u32 texgens,
                            const ShaderHostConfig& host_config);
 
@@ -202,8 +206,8 @@ void AssignVSOutputMembers(ShaderCode& object, std::string_view a, std::string_v
 // As a workaround, we interpolate at the centroid of the coveraged pixel, which
 // is always inside the primitive.
 // Without MSAA, this flag is defined to have no effect.
-const char* GetInterpolationQualifier(bool msaa, bool ssaa, bool in_glsl_interface_block = false,
-                                      bool in = false);
+const char* GetInterpolationQualifier(APIType api_type, bool msaa, bool ssaa,
+                                      bool in_glsl_interface_block = false, bool in = false);
 
 // bitfieldExtract generator for BitField types
 template <auto ptr_to_bitfield_member>
@@ -220,7 +224,7 @@ void WriteSwitch(ShaderCode& out, APIType ApiType, std::string_view variable,
                  const Common::EnumMap<std::string_view, last_member>& values, int indent,
                  bool break_)
 {
-  const bool make_switch = (ApiType == APIType::D3D);
+  const bool make_switch = (ApiType == APIType::D3D || ApiType == APIType::Metal);
 
   // The second template argument is needed to avoid compile errors from ambiguity with multiple
   // enums with the same number of members in GCC prior to 8.  See https://godbolt.org/z/xcKaW1seW
@@ -271,6 +275,8 @@ void WriteSwitch(ShaderCode& out, APIType ApiType, std::string_view variable,
     };
     BuildTree(indent, 0, static_cast<u32>(last_member) + 1);
   }
+  if (!break_)
+    out.Write("{:{}}UNREACHABLE\n", "", indent);
 }
 
 // Constant variable names
@@ -323,7 +329,7 @@ static const char s_shader_uniforms[] = "\tuint    components;\n"
                                         "\tuint4   xfmem_pack1[8];\n"
                                         "\tfloat4 " I_CACHED_TANGENT ";\n"
                                         "\tfloat4 " I_CACHED_BINORMAL ";\n"
-                                        "\t#define xfmem_texMtxInfo(i) (xfmem_pack1[(i)].x)\n"
-                                        "\t#define xfmem_postMtxInfo(i) (xfmem_pack1[(i)].y)\n"
-                                        "\t#define xfmem_color(i) (xfmem_pack1[(i)].z)\n"
-                                        "\t#define xfmem_alpha(i) (xfmem_pack1[(i)].w)\n";
+                                        "\t#define xfmem_texMtxInfo(i) (CB_VS(xfmem_pack1[(i)].x))\n"
+                                        "\t#define xfmem_postMtxInfo(i) (CB_VS(xfmem_pack1[(i)].y))\n"
+                                        "\t#define xfmem_color(i) (CB_VS(xfmem_pack1[(i)].z))\n"
+                                        "\t#define xfmem_alpha(i) (CB_VS(xfmem_pack1[(i)].w))\n";

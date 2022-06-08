@@ -140,7 +140,7 @@ static void DefineOutputMember(ShaderCode& object, APIType api_type, std::string
                                std::string_view type, std::string_view name, int var_index,
                                std::string_view semantic = {}, int semantic_index = -1)
 {
-  object.Write("\t{} {} {}", qualifier, type, name);
+  object.Write("\t{}{} {}", qualifier, type, name);
 
   if (var_index != -1)
     object.Write("{}", var_index);
@@ -184,6 +184,35 @@ void GenerateVSOutputMembers(ShaderCode& object, APIType api_type, u32 texgens,
   }
 }
 
+void GenerateVSOutputMembers(ShaderCode& object, u32 texgens,
+                             const ShaderHostConfig& host_config, std::string_view qualifier,
+                             std::string_view location)
+{
+  u32 counter = 0;
+  object.Write("  DECL_{}_POSITION\n", location);
+  if (host_config.backend_depth_clamp)
+    object.Write("  DECL_{}_CLIPDIST\n", location);
+  object.Write("  DECL_{}({}float4, colors_0, COLOR0, {})\n", location, qualifier, counter++);
+  object.Write("  DECL_{}({}float4, colors_1, COLOR1, {})\n", location, qualifier, counter++);
+  for (u32 i = 0; i < texgens; ++i)
+  {
+    object.Write("  DECL_{}({}float3, tex{}, TEXCOORD{}, {})\n",
+                 location, qualifier, i, i, counter++);
+  }
+  if (!host_config.fast_depth_calc)
+  {
+    object.Write("  DECL_{}({}float4, clipPos, TEXCOORD{}, {})\n",
+                 location, qualifier, texgens, counter++);
+  }
+  if (host_config.per_pixel_lighting)
+  {
+    object.Write("  DECL_{}({}float3, Normal, TEXCOORD{}, {})\n",
+                 location, qualifier, texgens + 1, counter++);
+    object.Write("  DECL_{}({}float3, WorldPos, TEXCOORD{}, {})\n",
+                 location, qualifier, texgens + 2, counter++);
+  }
+}
+
 void AssignVSOutputMembers(ShaderCode& object, std::string_view a, std::string_view b, u32 texgens,
                            const ShaderHostConfig& host_config)
 {
@@ -210,7 +239,7 @@ void AssignVSOutputMembers(ShaderCode& object, std::string_view a, std::string_v
   }
 }
 
-const char* GetInterpolationQualifier(bool msaa, bool ssaa, bool in_glsl_interface_block, bool in)
+const char* GetInterpolationQualifier(APIType api_type, bool msaa, bool ssaa, bool in_glsl_interface_block, bool in)
 {
   if (!msaa)
     return "";
@@ -220,15 +249,19 @@ const char* GetInterpolationQualifier(bool msaa, bool ssaa, bool in_glsl_interfa
   if (in_glsl_interface_block && !g_ActiveConfig.backend_info.bSupportsBindingLayout)
   {
     if (!ssaa)
-      return in ? "centroid in" : "centroid out";
+      return in ? "centroid in " : "centroid out ";
     else
-      return in ? "sample in" : "sample out";
+      return in ? "sample in " : "sample out ";
+  }
+  else if (api_type == APIType::Metal)
+  {
+    return ssaa ? "[[sample_perspective]] " : "[[centroid_perspective]] ";
   }
   else
   {
     if (!ssaa)
-      return "centroid";
+      return "centroid ";
     else
-      return "sample";
+      return "sample ";
   }
 }

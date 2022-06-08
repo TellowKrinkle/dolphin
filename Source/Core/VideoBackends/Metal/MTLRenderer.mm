@@ -158,13 +158,7 @@ private:
 std::unique_ptr<AbstractShader> Metal::Renderer::CreateShaderFromSource(
   ShaderStage stage, std::string_view source, std::string_view name)
 { @autoreleasepool {
-  std::string msl = Util::CompileShader(stage, source);
-  if (msl.empty())
-  {
-    PanicAlertFmt("Failed to compile shader {}", name);
-    WARN_LOG_FMT(VIDEO, "Failing shader: {}", source);
-    return nullptr;
-  }
+  std::string msl = Util::PrepareMSLShader(stage, source);
   NSError* err = nullptr;
   auto lib = MRCTransfer([g_device newLibraryWithSource:[NSString stringWithUTF8String:msl.data()] options:nil error:&err]);
   if (err)

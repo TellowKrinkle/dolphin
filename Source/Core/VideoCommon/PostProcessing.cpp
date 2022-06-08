@@ -441,19 +441,39 @@ std::string PostProcessing::GetUniformBufferHeader() const
 {
   std::ostringstream ss;
   u32 unused_counter = 1;
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
-    ss << "cbuffer PSBlock : register(b0) {\n";
-  else
-    ss << "UBO_BINDING(std140, 1) uniform PSBlock {\n";
 
-  // Builtin uniforms
-  ss << "  float4 resolution;\n";
-  ss << "  float4 window_resolution;\n";
-  ss << "  float4 src_rect;\n";
-  ss << "  int src_layer;\n";
-  ss << "  uint time;\n";
-  for (u32 i = 0; i < 2; i++)
-    ss << "  uint ubo_align_" << unused_counter++ << "_;\n";
+  ss << "DECL_CB_UTILITY {\n";
+
+  auto add = [&](std::string_view type, std::string_view name, int size, bool align)
+  {
+    if (g_ActiveConfig.backend_info.api_type == APIType::Metal)
+    {
+      if (size > 1)
+        ss << fmt::format("  {}{}{} _{};\n", align ? "alignas(16) " : "", type, size, name);
+      else
+        ss << fmt::format("  {}{} _{};\n", align ? "alignas(16) " : "", type, name);
+      ss << fmt::format("#define {} CB_UTILITY(_{})\n", name, name);
+    }
+    else
+    {
+      if (size > 1)
+        ss << fmt::format("  {}{} {};\n", type, size, name);
+      else
+        ss << fmt::format("  {} {};\n", type, name);
+      if (align)
+        for (u32 i = size; i < 4; i++)
+          ss << fmt::format("  {} ubo_align_{}_;\n", type, unused_counter++);
+    }
+  };
+
+  add("float", "resolution", 4, false);
+  add("float", "window_resolution", 4, false);
+  add("float", "src_rect", 4, false);
+  add("int", "src_layer", 1, false);
+  add("uint", "time", 1, false);
+  if (g_ActiveConfig.backend_info.api_type != APIType::Metal)
+    for (u32 i = 0; i < 2; i++)
+      ss << "  uint ubo_align_" << unused_counter++ << "_;\n";
   ss << "\n";
 
   // Custom options/uniforms
@@ -461,33 +481,19 @@ std::string PostProcessing::GetUniformBufferHeader() const
   {
     if (it.second.m_type == PostProcessingConfiguration::ConfigurationOption::OptionType::Bool)
     {
-      ss << fmt::format("  int {};\n", it.first);
-      for (u32 i = 0; i < 3; i++)
-        ss << "  int ubo_align_" << unused_counter++ << "_;\n";
+      add("int", it.first, 1, true);
     }
     else if (it.second.m_type ==
              PostProcessingConfiguration::ConfigurationOption::OptionType::Integer)
     {
       u32 count = static_cast<u32>(it.second.m_integer_values.size());
-      if (count == 1)
-        ss << fmt::format("  int {};\n", it.first);
-      else
-        ss << fmt::format("  int{} {};\n", count, it.first);
-
-      for (u32 i = count; i < 4; i++)
-        ss << "  int ubo_align_" << unused_counter++ << "_;\n";
+      add("int", it.first, count, true);
     }
     else if (it.second.m_type ==
              PostProcessingConfiguration::ConfigurationOption::OptionType::Float)
     {
       u32 count = static_cast<u32>(it.second.m_float_values.size());
-      if (count == 1)
-        ss << fmt::format("  float {};\n", it.first);
-      else
-        ss << fmt::format("  float{} {};\n", count, it.first);
-
-      for (u32 i = count; i < 4; i++)
-        ss << "  float ubo_align_" << unused_counter++ << "_;\n";
+      add("float", it.first, count, true);
     }
   }
 
@@ -499,48 +505,37 @@ std::string PostProcessing::GetHeader() const
 {
   std::ostringstream ss;
   ss << GetUniformBufferHeader();
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
-  {
-    ss << "Texture2DArray samp0 : register(t0);\n";
-    ss << "SamplerState samp0_ss : register(s0);\n";
-  }
-  else
-  {
-    ss << "SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n";
+  ss << "INPUT_DECL_BEGIN\n"
+        "  DECL_INPUT_CB_UTILITY\n"
+        "  DECL_INPUT_TEXTURE(tex0, 0)\n"
+        "  DECL_INPUT_SAMPLER(samp0, 0)\n"
+        "INPUT_DECL_END\n\n"
+        "PIXEL_INPUT_DECL_BEGIN\n"
+        "  DECL_PIXEL_INPUT(float3, v_tex0_, TEXCOORD0, 0)\n"
+        "PIXEL_INPUT_DECL_END\n\n"
+        "PIXEL_OUTPUT_DECL_BEGIN\n"
+        "  DECL_PIXEL_OUTPUT_COLOR0(float4)\n"
+        "PIXEL_OUTPUT_DECL_END\n\n";
 
-    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
-    {
-      ss << "VARYING_LOCATION(0) in VertexData {\n";
-      ss << "  float3 v_tex0;\n";
-      ss << "};\n";
-    }
-    else
-    {
-      ss << "VARYING_LOCATION(0) in float3 v_tex0;\n";
-    }
-
-    ss << "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n";
-  }
-
-  // Rename main, since we need to set up globals
   if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
   {
     ss << R"(
+#undef ocol0
 #define main real_main
 static float3 v_tex0;
 static float4 ocol0;
-
-// Wrappers for sampling functions.
-#define texture(sampler, coords) sampler.Sample(sampler##_ss, coords)
-#define textureOffset(sampler, coords, offset) sampler.Sample(sampler##_ss, coords, offset)
 )";
+  }
+  else
+  {
+    ss << "#define v_tex0 INPUT(v_tex0_)";
   }
 
   ss << R"(
-float4 Sample() { return texture(samp0, v_tex0); }
-float4 SampleLocation(float2 location) { return texture(samp0, float3(location, float(v_tex0.z))); }
-float4 SampleLayer(int layer) { return texture(samp0, float3(v_tex0.xy, float(layer))); }
-#define SampleOffset(offset) textureOffset(samp0, v_tex0, offset)
+float4 Sample() { return TEXTURE_SAMPLE(tex0, samp0, v_tex0); }
+float4 SampleLocation(float2 location) { return TEXTURE_SAMPLE(tex0, samp0, float3(location, float(v_tex0.z))); }
+float4 SampleLayer(int layer) { return TEXTURE_SAMPLE_LAYER(tex0, samp0, v_tex0.xy, layer); }
+#define SampleOffset(offset) TEXTURE_SAMPLE_OFFSET(tex0, samp0, v_tex0, offset)
 
 float2 GetWindowResolution()
 {
@@ -613,37 +608,26 @@ bool PostProcessing::CompileVertexShader()
 {
   std::ostringstream ss;
   ss << GetUniformBufferHeader();
+  ss << R"(
+INPUT_DECL_BEGIN
+  DECL_INPUT_CB_UTILITY
+INPUT_DECL_END
 
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
-  {
-    ss << "void main(in uint id : SV_VertexID, out float3 v_tex0 : TEXCOORD0,\n";
-    ss << "          out float4 opos : SV_Position) {\n";
-  }
-  else
-  {
-    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
-    {
-      ss << "VARYING_LOCATION(0) out VertexData {\n";
-      ss << "  float3 v_tex0;\n";
-      ss << "};\n";
-    }
-    else
-    {
-      ss << "VARYING_LOCATION(0) out float3 v_tex0;\n";
-    }
+VERTEX_INPUT_DECL_BEGIN
+VERTEX_INPUT_DECL_END
 
-    ss << "#define id gl_VertexID\n";
-    ss << "#define opos gl_Position\n";
-    ss << "void main() {\n";
-  }
-  ss << "  v_tex0 = float3(float((id << 1) & 2), float(id & 2), 0.0f);\n";
-  ss << "  opos = float4(v_tex0.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n";
-  ss << "  v_tex0 = float3(src_rect.xy + (src_rect.zw * v_tex0.xy), float(src_layer));\n";
+VERTEX_OUTPUT_DECL_BEGIN
+  DECL_VERTEX_OUTPUT_POSITION
+  DECL_VERTEX_OUTPUT(float3, v_tex0_, TEXCOORD0, 0)
+VERTEX_OUTPUT_DECL_END
 
-  if (g_ActiveConfig.backend_info.api_type == APIType::Vulkan)
-    ss << "  opos.y = -opos.y;\n";
-
-  ss << "}\n";
+DECL_MAIN {
+  float3 tmp = float3(float((vid << 1) & 2), float(vid & 2), 0.0f);
+  opos = float4(tmp.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);
+  OUTPUT(v_tex0_) = float3(src_rect.xy + (src_rect.zw * tmp.xy), float(src_layer));
+  FIXUP_OPOS_VK;
+}
+)";
 
   m_vertex_shader = g_renderer->CreateShaderFromSource(ShaderStage::Vertex, ss.str(),
                                                        "Post-processing vertex shader");

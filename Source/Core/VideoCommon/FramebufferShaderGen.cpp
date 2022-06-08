@@ -23,226 +23,67 @@ APIType GetAPIType()
   return g_ActiveConfig.backend_info.api_type;
 }
 
-void EmitUniformBufferDeclaration(ShaderCode& code)
+void EmitVertexInputsAndOutputs(ShaderCode& code, u32 num_tex_inputs, u32 num_color_inputs,
+                                bool position_input, u32 num_tex_outputs, u32 num_color_outputs,
+                                bool point_size = false, bool vid = false)
 {
-  if (GetAPIType() == APIType::D3D)
-    code.Write("cbuffer PSBlock : register(b0)\n");
-  else
-    code.Write("UBO_BINDING(std140, 1) uniform PSBlock\n");
+  code.Write("VERTEX_INPUT_DECL_BEGIN\n");
+  if (vid)
+    code.Write("  DECL_VERTEX_INPUT_VID\n");
+  for (u32 i = 0; i < num_tex_inputs; i++)
+    code.Write("  DECL_VERTEX_INPUT(float3, rawtex{}, TEXCOORD{}, {})\n", i, i, SHADER_TEXTURE0_ATTRIB + i);
+  for (u32 i = 0; i < num_color_inputs; i++)
+    code.Write("  DECL_VERTEX_INPUT(float4, rawcolor{}, COLOR{}, {})\n", i, i, SHADER_COLOR0_ATTRIB + i);
+  if (position_input)
+    code.Write("  DECL_VERTEX_INPUT(float4, rawpos, POSITION, {})\n", SHADER_POSITION_ATTRIB);
+  code.Write("VERTEX_INPUT_DECL_END\n");
+  code.Write("VERTEX_OUTPUT_DECL_BEGIN\n");
+  for (u32 i = 0; i < num_tex_outputs; i++)
+    code.Write("  DECL_VERTEX_OUTPUT(float3, v_tex{}, TEXCOORD{}, {})\n", i, i, i);
+  for (u32 i = 0; i < num_color_outputs; i++)
+    code.Write("  DECL_VERTEX_OUTPUT(float4, v_col{}, COLOR{}, {})\n", i, i, num_tex_outputs + i);
+  code.Write("  DECL_VERTEX_OUTPUT_POSITION\n");
+  if (point_size && g_ActiveConfig.backend_info.bSupportsLargePoints)
+    code.Write("  DECL_VERTEX_OUTPUT_POINT_SIZE\n");
+  code.Write("VERTEX_OUTPUT_DECL_END\n\n");
 }
 
-void EmitSamplerDeclarations(ShaderCode& code, u32 start = 0, u32 end = 1,
-                             bool multisampled = false)
+void EmitPixelInputsAndOutputs(ShaderCode& code, u32 num_tex_inputs, u32 num_color_inputs,
+                               std::string_view output_type = "float4",
+                               std::string_view extra_vars = {}, bool emit_frag_coord = false)
 {
-  switch (GetAPIType())
-  {
-  case APIType::D3D:
-  {
-    const char* array_type = multisampled ? "Texture2DMSArray<float4>" : "Texture2DArray<float4>";
-
-    for (u32 i = start; i < end; i++)
-    {
-      code.Write("{} tex{} : register(t{});\n", array_type, i, i);
-      code.Write("SamplerState samp{} : register(s{});\n", i, i);
-    }
-  }
-  break;
-
-  case APIType::Metal:
-  case APIType::OpenGL:
-  case APIType::Vulkan:
-  {
-    const char* array_type = multisampled ? "sampler2DMSArray" : "sampler2DArray";
-
-    for (u32 i = start; i < end; i++)
-    {
-      code.Write("SAMPLER_BINDING({}) uniform {} samp{};\n", i, array_type, i);
-    }
-  }
-  break;
-  default:
-    break;
-  }
+  code.Write("PIXEL_INPUT_DECL_BEGIN\n");
+  for (u32 i = 0; i < num_tex_inputs; i++)
+    code.Write("  DECL_PIXEL_INPUT(float3, v_tex{}, TEXCOORD{}, {})\n", i, i, i);
+  for (u32 i = 0; i < num_color_inputs; i++)
+    code.Write("  DECL_PIXEL_INPUT(float4, v_col{}, COLOR{}, {})\n", i, i, num_tex_inputs + i);
+  if (emit_frag_coord)
+    code.Write("  DECL_PIXEL_INPUT_POSITION\n");
+  if (!extra_vars.empty())
+    code.Write("  {};\n", extra_vars);
+  code.Write("PIXEL_INPUT_DECL_END\n");
+  code.Write("PIXEL_OUTPUT_DECL_BEGIN\n");
+  code.Write("  DECL_PIXEL_OUTPUT_COLOR0({})\n", output_type);
+  code.Write("PIXEL_OUTPUT_DECL_END\n\n");
 }
 
-void EmitSampleTexture(ShaderCode& code, u32 n, std::string_view coords)
-{
-  switch (GetAPIType())
-  {
-  case APIType::D3D:
-    code.Write("tex{}.Sample(samp{}, {})", n, n, coords);
-    break;
-
-  case APIType::Metal:
-  case APIType::OpenGL:
-  case APIType::Vulkan:
-    code.Write("texture(samp{}, {})", n, coords);
-    break;
-
-  default:
-    break;
-  }
-}
-
-// Emits a texel fetch/load instruction. Assumes that "coords" is a 4-element vector, with z
-// containing the layer, and w containing the mipmap level.
-void EmitTextureLoad(ShaderCode& code, u32 n, std::string_view coords)
-{
-  switch (GetAPIType())
-  {
-  case APIType::D3D:
-    code.Write("tex{}.Load({})", n, coords);
-    break;
-
-  case APIType::Metal:
-  case APIType::OpenGL:
-  case APIType::Vulkan:
-    code.Write("texelFetch(samp{}, ({}).xyz, ({}).w)", n, coords, coords);
-    break;
-
-  default:
-    break;
-  }
-}
-
-void EmitVertexMainDeclaration(ShaderCode& code, u32 num_tex_inputs, u32 num_color_inputs,
-                               bool position_input, u32 num_tex_outputs, u32 num_color_outputs,
-                               std::string_view extra_inputs = {})
-{
-  switch (GetAPIType())
-  {
-  case APIType::D3D:
-  {
-    code.Write("void main(");
-    for (u32 i = 0; i < num_tex_inputs; i++)
-      code.Write("in float3 rawtex{} : TEXCOORD{}, ", i, i);
-    for (u32 i = 0; i < num_color_inputs; i++)
-      code.Write("in float4 rawcolor{} : COLOR{}, ", i, i);
-    if (position_input)
-      code.Write("in float4 rawpos : POSITION, ");
-    code.Write("{}", extra_inputs);
-    for (u32 i = 0; i < num_tex_outputs; i++)
-      code.Write("out float3 v_tex{} : TEXCOORD{}, ", i, i);
-    for (u32 i = 0; i < num_color_outputs; i++)
-      code.Write("out float4 v_col{} : COLOR{}, ", i, i);
-    code.Write("out float4 opos : SV_Position)\n");
-  }
-  break;
-
-  case APIType::Metal:
-  case APIType::OpenGL:
-  case APIType::Vulkan:
-  {
-    for (u32 i = 0; i < num_tex_inputs; i++)
-    {
-      const auto attribute = SHADER_TEXTURE0_ATTRIB + i;
-      code.Write("ATTRIBUTE_LOCATION({}) in float3 rawtex{};\n", attribute, i);
-    }
-    for (u32 i = 0; i < num_color_inputs; i++)
-    {
-      const auto attribute = SHADER_COLOR0_ATTRIB + i;
-      code.Write("ATTRIBUTE_LOCATION({}) in float4 rawcolor{};\n", attribute, i);
-    }
-    if (position_input)
-      code.Write("ATTRIBUTE_LOCATION({}) in float4 rawpos;\n", SHADER_POSITION_ATTRIB);
-
-    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
-    {
-      code.Write("VARYING_LOCATION(0) out VertexData {{\n");
-      for (u32 i = 0; i < num_tex_outputs; i++)
-        code.Write("  float3 v_tex{};\n", i);
-      for (u32 i = 0; i < num_color_outputs; i++)
-        code.Write("  float4 v_col{};\n", i);
-      code.Write("}};\n");
-    }
-    else
-    {
-      for (u32 i = 0; i < num_tex_outputs; i++)
-        code.Write("VARYING_LOCATION({}) out float3 v_tex{};\n", i, i);
-      for (u32 i = 0; i < num_color_outputs; i++)
-        code.Write("VARYING_LOCATION({}) out float4 v_col{};\n", num_tex_inputs + i, i);
-    }
-    code.Write("#define opos gl_Position\n");
-    code.Write("{}\n", extra_inputs);
-    code.Write("void main()\n");
-  }
-  break;
-  default:
-    break;
-  }
-}
-
-void EmitPixelMainDeclaration(ShaderCode& code, u32 num_tex_inputs, u32 num_color_inputs,
-                              std::string_view output_type = "float4",
-                              std::string_view extra_vars = {}, bool emit_frag_coord = false)
-{
-  switch (GetAPIType())
-  {
-  case APIType::D3D:
-  {
-    code.Write("void main(");
-    for (u32 i = 0; i < num_tex_inputs; i++)
-      code.Write("in float3 v_tex{} : TEXCOORD{}, ", i, i);
-    for (u32 i = 0; i < num_color_inputs; i++)
-      code.Write("in float4 v_col{} : COLOR{}, ", i, i);
-    if (emit_frag_coord)
-      code.Write("in float4 frag_coord : SV_Position, ");
-    code.Write("{}out {} ocol0 : SV_Target)\n", extra_vars, output_type);
-  }
-  break;
-
-  case APIType::Metal:
-  case APIType::OpenGL:
-  case APIType::Vulkan:
-  {
-    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
-    {
-      code.Write("VARYING_LOCATION(0) in VertexData {{\n");
-      for (u32 i = 0; i < num_tex_inputs; i++)
-        code.Write("  float3 v_tex{};\n", i);
-      for (u32 i = 0; i < num_color_inputs; i++)
-        code.Write("  float4 v_col{};\n", i);
-      code.Write("}};\n");
-    }
-    else
-    {
-      for (u32 i = 0; i < num_tex_inputs; i++)
-        code.Write("VARYING_LOCATION({}) in float3 v_tex{};\n", i, i);
-      for (u32 i = 0; i < num_color_inputs; i++)
-        code.Write("VARYING_LOCATION({}) in float4 v_col{};\n", num_tex_inputs + i, i);
-    }
-
-    code.Write("FRAGMENT_OUTPUT_LOCATION(0) out {} ocol0;\n", output_type);
-    code.Write("{}\n", extra_vars);
-    if (emit_frag_coord)
-      code.Write("#define frag_coord gl_FragCoord\n");
-    code.Write("void main()\n");
-  }
-  break;
-
-  default:
-    break;
-  }
-}
 }  // Anonymous namespace
 
 std::string GenerateScreenQuadVertexShader()
 {
   ShaderCode code;
-  EmitVertexMainDeclaration(code, 0, 0, false, 1, 0,
-                            GetAPIType() == APIType::D3D ? "in uint id : SV_VertexID, " :
-                                                           "#define id gl_VertexID\n");
+  code.Write("// SHADER_SUPPORTS_MSL\n"
+             "INPUT_DECL_BEGIN\n"
+             "INPUT_DECL_END\n\n");
+  EmitVertexInputsAndOutputs(code, 0, 0, false, 1, 0, false, true);
   code.Write(
+      "DECL_MAIN\n"
       "{{\n"
-      "  v_tex0 = float3(float((id << 1) & 2), float(id & 2), 0.0f);\n"
-      "  opos = float4(v_tex0.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n");
-
-  // NDC space is flipped in Vulkan. We also flip in GL so that (0,0) is in the lower-left.
-  if (GetAPIType() == APIType::Vulkan || GetAPIType() == APIType::OpenGL || GetAPIType() == APIType::Metal)
-    code.Write("  opos.y = -opos.y;\n");
-
-  code.Write("}}\n");
-
+      "  OUTPUT(v_tex0) = float3(float((vid << 1) & 2), float(vid & 2), 0.0f);\n"
+      "  opos = float4(OUTPUT(v_tex0.xy) * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n"
+      "  // NDC space is flipped in Vulkan. We also flip in GL so that (0,0) is in the lower-left.\n"
+      "  FIXUP_OPOS;\n"
+      "}}\n");
   return code.GetBuffer();
 }
 
@@ -341,38 +182,41 @@ std::string GeneratePassthroughGeometryShader(u32 num_tex, u32 num_colors)
 std::string GenerateTextureCopyVertexShader()
 {
   ShaderCode code;
-  EmitUniformBufferDeclaration(code);
-  code.Write("{{"
+  code.Write("// SHADER_SUPPORTS_MSL\n"
+             "DECL_CB_UTILITY\n"
+             "{{\n"
              "  float2 src_offset;\n"
              "  float2 src_size;\n"
-             "}};\n\n");
-
-  EmitVertexMainDeclaration(code, 0, 0, false, 1, 0,
-                            GetAPIType() == APIType::D3D ? "in uint id : SV_VertexID, " :
-                                                           "#define id gl_VertexID");
-  code.Write("{{\n"
-             "  v_tex0 = float3(float((id << 1) & 2), float(id & 2), 0.0f);\n"
-             "  opos = float4(v_tex0.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n"
-             "  v_tex0 = float3(src_offset + (src_size * v_tex0.xy), 0.0f);\n");
-
-  // NDC space is flipped in Vulkan. We also flip in GL so that (0,0) is in the lower-left.
-  if (GetAPIType() == APIType::Vulkan || GetAPIType() == APIType::OpenGL || GetAPIType() == APIType::Metal)
-    code.Write("  opos.y = -opos.y;\n");
-
-  code.Write("}}\n");
-
+             "}};\n"
+             "\n"
+             "INPUT_DECL_BEGIN\n"
+             "  DECL_INPUT_CB_UTILITY\n"
+             "INPUT_DECL_END\n\n");
+  EmitVertexInputsAndOutputs(code, 0, 0, false, 1, 0, false, true);
+  code.Write(
+    "DECL_MAIN\n"
+    "{{\n"
+    "  float3 tmp = float3(float((vid << 1) & 2), float(vid & 2), 0.0f);\n"
+    "  opos = float4(tmp.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n"
+    "  OUTPUT(v_tex0) = float3(CB_UTILITY(src_offset) + (CB_UTILITY(src_size) * tmp.xy), 0.0f);\n"
+    "  // NDC space is flipped in Vulkan. We also flip in GL so that (0,0) is in the lower-left.\n"
+    "  FIXUP_OPOS;\n"
+    "}}\n");
   return code.GetBuffer();
 }
 
 std::string GenerateTextureCopyPixelShader()
 {
   ShaderCode code;
-  EmitSamplerDeclarations(code, 0, 1, false);
-  EmitPixelMainDeclaration(code, 1, 0);
-  code.Write("{{\n"
-             "  ocol0 = ");
-  EmitSampleTexture(code, 0, "v_tex0");
-  code.Write(";\n"
+  code.Write("// SHADER_SUPPORTS_MSL\n"
+             "INPUT_DECL_BEGIN\n"
+             "  DECL_INPUT_TEXTURE(tex0, 0)\n"
+             "  DECL_INPUT_SAMPLER(samp0, 0)\n"
+             "INPUT_DECL_END\n\n");
+  EmitPixelInputsAndOutputs(code, 1, 0);
+  code.Write("DECL_MAIN\n"
+             "{{\n"
+             "  ocol0 = TEXTURE_SAMPLE(tex0, samp0, INPUT(v_tex0));\n"
              "}}\n");
   return code.GetBuffer();
 }
@@ -380,9 +224,13 @@ std::string GenerateTextureCopyPixelShader()
 std::string GenerateColorPixelShader()
 {
   ShaderCode code;
-  EmitPixelMainDeclaration(code, 0, 1);
-  code.Write("{{\n"
-             "  ocol0 = v_col0;\n"
+  code.Write("// SHADER_SUPPORTS_MSL\n"
+             "INPUT_DECL_BEGIN\n"
+             "INPUT_DECL_END\n\n");
+  EmitPixelInputsAndOutputs(code, 0, 1);
+  code.Write("DECL_MAIN\n"
+             "{{\n"
+             "  ocol0 = INPUT(v_col0);\n"
              "}}\n");
   return code.GetBuffer();
 }
@@ -390,54 +238,43 @@ std::string GenerateColorPixelShader()
 std::string GenerateResolveDepthPixelShader(u32 samples)
 {
   ShaderCode code;
-  EmitSamplerDeclarations(code, 0, 1, true);
-  EmitPixelMainDeclaration(code, 1, 0, "float",
-                           GetAPIType() == APIType::D3D ? "in float4 ipos : SV_Position, " : "");
-  code.Write("{{\n"
-             "  int layer = int(v_tex0.z);\n");
-  if (GetAPIType() == APIType::D3D)
-    code.Write("  int3 coords = int3(int2(ipos.xy), layer);\n");
-  else
-    code.Write("  int3 coords = int3(int2(gl_FragCoord.xy), layer);\n");
-
-  // Take the minimum of all depth samples.
-  if (GetAPIType() == APIType::D3D)
-    code.Write("  ocol0 = tex0.Load(coords, 0).r;\n");
-  else
-    code.Write("  ocol0 = texelFetch(samp0, coords, 0).r;\n");
-  code.Write("  for (int i = 1; i < {}; i++)\n", samples);
-  if (GetAPIType() == APIType::D3D)
-    code.Write("    ocol0 = min(ocol0, tex0.Load(coords, i).r);\n");
-  else
-    code.Write("    ocol0 = min(ocol0, texelFetch(samp0, coords, i).r);\n");
-
-  code.Write("}}\n");
+  code.Write("// SHADER_SUPPORTS_MSL\n"
+             "INPUT_DECL_BEGIN\n"
+             "  DECL_INPUT_DEPTH_MS(tex0, 0)\n"
+             "INPUT_DECL_END\n\n");
+  EmitPixelInputsAndOutputs(code, 1, 0, "float", {}, true);
+  code.Write("DECL_MAIN\n"
+             "{{\n"
+             "  int layer = int(INPUT(v_tex0.z));\n"
+             "  int2 coords = int2(frag_coord.xy);\n"
+             "  ocol0 = DEPTH_FETCH_MS(tex0, coords, layer, 0).r;\n");
+  code.Write("  for (int i = 0; i < {}; i++)\n", samples);
+  code.Write("    ocol0 = min(ocol0, DEPTH_FETCH_MS(tex0, coords, layer, i).r);\n"
+             "}}\n");
   return code.GetBuffer();
 }
 
 std::string GenerateClearVertexShader()
 {
   ShaderCode code;
-  EmitUniformBufferDeclaration(code);
-  code.Write("{{\n"
+  code.Write("// SHADER_SUPPORTS_MSL\n"
+             "DECL_CB_UTILITY\n"
+             "{{\n"
              "  float4 clear_color;\n"
              "  float clear_depth;\n"
-             "}};\n");
-
-  EmitVertexMainDeclaration(code, 0, 0, false, 0, 1,
-                            GetAPIType() == APIType::D3D ? "in uint id : SV_VertexID, " :
-                                                           "#define id gl_VertexID\n");
-  code.Write(
-      "{{\n"
-      "  float2 coord = float2(float((id << 1) & 2), float(id & 2));\n"
-      "  opos = float4(coord * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), clear_depth, 1.0f);\n"
-      "  v_col0 = clear_color;\n");
-
-  // NDC space is flipped in Vulkan
-  if (GetAPIType() == APIType::Vulkan)
-    code.Write("  opos.y = -opos.y;\n");
-
-  code.Write("}}\n");
+             "}};\n"
+             "INPUT_DECL_BEGIN\n"
+             "  DECL_INPUT_CB_UTILITY\n"
+             "INPUT_DECL_END\n");
+  EmitVertexInputsAndOutputs(code, 0, 0, false, 0, 1, false, true);
+  code.Write("DECL_MAIN\n"
+             "{{\n"
+             "  float2 coord = float2(float((vid << 1) & 2), float(vid & 2));\n"
+             "  opos = float4(coord * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f),\n"
+             "                CB_UTILITY(clear_depth), 1.0f);\n"
+             "  OUTPUT(v_col0) = CB_UTILITY(clear_color);\n"
+             "  FIXUP_OPOS_VK;\n"
+             "}}\n");
 
   return code.GetBuffer();
 }
@@ -445,64 +282,49 @@ std::string GenerateClearVertexShader()
 std::string GenerateEFBPokeVertexShader()
 {
   ShaderCode code;
-  EmitVertexMainDeclaration(code, 0, 1, true, 0, 1);
-  code.Write("{{\n"
-             "  v_col0 = rawcolor0;\n"
-             "  opos = float4(rawpos.xyz, 1.0f);\n");
+  code.Write("// SHADER_SUPPORTS_MSL\n"
+             "INPUT_DECL_BEGIN\n"
+             "INPUT_DECL_END\n\n");
+  EmitVertexInputsAndOutputs(code, 0, 1, true, 0, 1, true);
+  code.Write("DECL_MAIN\n"
+             "{{\n"
+             "OUTPUT(v_col0) = INPUT(rawcolor0);\n"
+             "opos = float4(INPUT(rawpos.xyz), 1.0f);\n");
   if (g_ActiveConfig.backend_info.bSupportsLargePoints)
-    code.Write("  gl_PointSize = rawpos.w;\n");
-
-  // NDC space is flipped in Vulkan.
-  if (GetAPIType() == APIType::Vulkan)
-    code.Write("  opos.y = -opos.y;\n");
-
-  code.Write("}}\n");
+    code.Write("  gl_PointSize = INPUT(rawpos.w);\n");
+  code.Write("  FIXUP_OPOS_VK;\n}}\n");
   return code.GetBuffer();
 }
 
 std::string GenerateFormatConversionShader(EFBReinterpretType convtype, u32 samples)
 {
   ShaderCode code;
-  EmitSamplerDeclarations(code, 0, 1, samples > 1);
-  EmitPixelMainDeclaration(
-      code, 1, 0, "float4",
-      GetAPIType() == APIType::D3D ?
-          (g_ActiveConfig.bSSAA ?
-               "in float4 ipos : SV_Position, in uint isample : SV_SampleIndex, " :
-               "in float4 ipos : SV_Position, ") :
-          "");
-  code.Write("{{\n"
-             "  int layer = int(v_tex0.z);\n");
-  if (GetAPIType() == APIType::D3D)
-    code.Write("  int3 coords = int3(int2(ipos.xy), layer);\n");
-  else
-    code.Write("  int3 coords = int3(int2(gl_FragCoord.xy), layer);\n");
-
+  code.Write("// SHADER_SUPPORTS_MSL\n");
+  code.Write("INPUT_DECL_BEGIN\n");
+  code.Write("  DECL_INPUT_TEXTURE{}(tex0, 0)\n", samples > 1 ? "_MS" : "");
+  code.Write("  DECL_INPUT_SAMPLER(samp0, 0)\n");
+  code.Write("INPUT_DECL_END\n\n");
+  EmitPixelInputsAndOutputs(code, 1, 0, "float4", g_ActiveConfig.bSSAA ? "DECL_PIXEL_INPUT_SAMPLE_IDX" : "", true);
+  code.Write("DECL_MAIN\n"
+             "{{\n"
+             "  int layer = int(INPUT(v_tex0.z));\n"
+             "  int2 coords = int2(frag_coord.xy);\n");
   if (samples == 1)
   {
     // No MSAA at all.
-    if (GetAPIType() == APIType::D3D)
-      code.Write("  float4 val = tex0.Load(int4(coords, 0));\n");
-    else
-      code.Write("  float4 val = texelFetch(samp0, coords, 0);\n");
+    code.Write("  float4 val = TEXTURE_FETCH(tex0, coords, layer);\n");
   }
   else if (g_ActiveConfig.bSSAA)
   {
     // Sample shading, shader runs once per sample
-    if (GetAPIType() == APIType::D3D)
-      code.Write("  float4 val = tex0.Load(coords, isample);");
-    else
-      code.Write("  float4 val = texelFetch(samp0, coords, gl_SampleID);");
+    code.Write("  float4 val = TEXTURE_FETCH_MS(tex0, coords, layer, gl_SampleID);\n");
   }
   else
   {
     // MSAA without sample shading, average out all samples.
     code.Write("  float4 val = float4(0.0f, 0.0f, 0.0f, 0.0f);\n");
     code.Write("  for (int i = 0; i < {}; i++)\n", samples);
-    if (GetAPIType() == APIType::D3D)
-      code.Write("    val += tex0.Load(coords, i);\n");
-    else
-      code.Write("    val += texelFetch(samp0, coords, i);\n");
+    code.Write("    val += TEXTURE_FETCH_MS(tex0, coords, layer, i);\n");
     code.Write("  val /= float({});\n", samples);
   }
 
@@ -553,59 +375,52 @@ std::string GenerateFormatConversionShader(EFBReinterpretType convtype, u32 samp
 std::string GenerateTextureReinterpretShader(TextureFormat from_format, TextureFormat to_format)
 {
   ShaderCode code;
-  EmitSamplerDeclarations(code, 0, 1, false);
-  EmitPixelMainDeclaration(code, 1, 0, "float4", "", true);
-  code.Write("{{\n"
-             "  int layer = int(v_tex0.z);\n"
-             "  int4 coords = int4(int2(frag_coord.xy), layer, 0);\n");
+  code.Write("// SHADER_SUPPORTS_MSL\n"
+             "INPUT_DECL_BEGIN\n"
+             "  DECL_INPUT_TEXTURE(tex0, 0)\n"
+             "INPUT_DECL_END\n\n");
+  EmitPixelInputsAndOutputs(code, 1, 0, "float4", {}, true);
+  code.Write("DECL_MAIN\n"
+             "{{\n"
+             "  int layer = int(INPUT(v_tex0.z));\n"
+             "  int2 coords = int2(frag_coord.xy);\n");
 
-  // Convert to a 32-bit value encompassing all channels, filling the most significant bits with
-  // zeroes.
+  // Convert to a 32-bit value encompassing all channels, filling the most significant bits with zeroes.
   code.Write("  uint raw_value;\n");
   switch (from_format)
   {
   case TextureFormat::I8:
   case TextureFormat::C8:
   {
-    code.Write("  float4 temp_value = ");
-    EmitTextureLoad(code, 0, "coords");
-    code.Write(";\n"
+    code.Write("  float4 temp_value = TEXTURE_FETCH(tex0, coords, layer);\n"
                "  raw_value = uint(temp_value.r * 255.0);\n");
   }
   break;
 
   case TextureFormat::IA8:
   {
-    code.Write("  float4 temp_value = ");
-    EmitTextureLoad(code, 0, "coords");
-    code.Write(";\n"
+    code.Write("  float4 temp_value = TEXTURE_FETCH(tex0, coords, layer);\n"
                "  raw_value = uint(temp_value.r * 255.0) | (uint(temp_value.a * 255.0) << 8);\n");
   }
   break;
 
   case TextureFormat::I4:
   {
-    code.Write("  float4 temp_value = ");
-    EmitTextureLoad(code, 0, "coords");
-    code.Write(";\n"
+    code.Write("  float4 temp_value = TEXTURE_FETCH(tex0, coords, layer);\n"
                "  raw_value = uint(temp_value.r * 15.0);\n");
   }
   break;
 
   case TextureFormat::IA4:
   {
-    code.Write("  float4 temp_value = ");
-    EmitTextureLoad(code, 0, "coords");
-    code.Write(";\n"
+    code.Write("  float4 temp_value = TEXTURE_FETCH(tex0, coords, layer);"
                "  raw_value = uint(temp_value.r * 15.0) | (uint(temp_value.a * 15.0) << 4);\n");
   }
   break;
 
   case TextureFormat::RGB565:
   {
-    code.Write("  float4 temp_value = ");
-    EmitTextureLoad(code, 0, "coords");
-    code.Write(";\n"
+    code.Write("  float4 temp_value = TEXTURE_FETCH(tex0, coords, layer);"
                "  raw_value = uint(temp_value.b * 31.0) | (uint(temp_value.g * 63.0) << 5) |\n"
                "              (uint(temp_value.r * 31.0) << 11);\n");
   }
@@ -613,12 +428,9 @@ std::string GenerateTextureReinterpretShader(TextureFormat from_format, TextureF
 
   case TextureFormat::RGB5A3:
   {
-    code.Write("  float4 temp_value = ");
-    EmitTextureLoad(code, 0, "coords");
-    code.Write(";\n");
-
     // 0.8784 = 224 / 255 which is the maximum alpha value that can be represented in 3 bits
     code.Write(
+        "  float4 temp_value = TEXTURE_FETCH(tex0, coords, layer);"
         "  if (temp_value.a > 0.878f) {{\n"
         "    raw_value = (uint(temp_value.b * 31.0)) | (uint(temp_value.g * 31.0) << 5) |\n"
         "                (uint(temp_value.r * 31.0) << 10) | 0x8000u;\n"
@@ -693,16 +505,24 @@ std::string GenerateTextureReinterpretShader(TextureFormat from_format, TextureF
 std::string GenerateEFBRestorePixelShader()
 {
   ShaderCode code;
-  EmitSamplerDeclarations(code, 0, 2, false);
-  EmitPixelMainDeclaration(code, 1, 0, "float4",
-                           GetAPIType() == APIType::D3D ? "out float depth : SV_Depth, " : "");
-  code.Write("{{\n"
-             "  ocol0 = ");
-  EmitSampleTexture(code, 0, "v_tex0");
-  code.Write(";\n");
-  code.Write("  {} = ", GetAPIType() == APIType::D3D ? "depth" : "gl_FragDepth");
-  EmitSampleTexture(code, 1, "v_tex0");
-  code.Write(".r;\n"
+  code.Write("// SHADER_SUPPORTS_MSL\n"
+             "INPUT_DECL_BEGIN\n"
+             "  DECL_INPUT_TEXTURE(tex0, 0)\n"
+             "  DECL_INPUT_DEPTH(tex1, 1)\n"
+             "  DECL_INPUT_SAMPLER(samp0, 0)\n"
+             "  DECL_INPUT_SAMPLER(samp1, 1)\n"
+             "INPUT_DECL_END\n"
+             "PIXEL_INPUT_DECL_BEGIN\n"
+             "  DECL_PIXEL_INPUT(float3, v_tex0, TEXCOORD0, 0)\n"
+             "PIXEL_INPUT_DECL_END\n"
+             "PIXEL_OUTPUT_DECL_BEGIN\n"
+             "  DECL_PIXEL_OUTPUT_COLOR0(float4)\n"
+             "  DECL_PIXEL_OUTPUT_DEPTH\n"
+             "PIXEL_OUTPUT_DECL_END\n\n"
+             "DECL_MAIN\n"
+             "{{\n"
+             "  ocol0 = TEXTURE_SAMPLE(tex0, samp0, INPUT(v_tex0));\n"
+             "  odepth = DEPTH_SAMPLE(tex1, samp1, INPUT(v_tex0)).r;\n"
              "}}\n");
   return code.GetBuffer();
 }
@@ -710,39 +530,43 @@ std::string GenerateEFBRestorePixelShader()
 std::string GenerateImGuiVertexShader()
 {
   ShaderCode code;
-
-  // Uniform buffer contains the viewport size, and we transform in the vertex shader.
-  EmitUniformBufferDeclaration(code);
-  code.Write("{{\n"
-             "float2 u_rcp_viewport_size_mul2;\n"
-             "}};\n\n");
-
-  EmitVertexMainDeclaration(code, 1, 1, true, 1, 1);
-  code.Write("{{\n"
-             "  v_tex0 = float3(rawtex0.xy, 0.0);\n"
-             "  v_col0 = rawcolor0;\n"
-             "  opos = float4(rawpos.x * u_rcp_viewport_size_mul2.x - 1.0,"
-             "                1.0 - rawpos.y * u_rcp_viewport_size_mul2.y, 0.0, 1.0);\n");
-
-  // NDC space is flipped in Vulkan.
-  if (GetAPIType() == APIType::Vulkan)
-    code.Write("  opos.y = -opos.y;\n");
-
-  code.Write("}}\n");
+  code.Write(
+    "// SHADER_SUPPORTS_MSL\n"
+    "DECL_CB_UTILITY\n"
+    "{{\n"
+    "  // Uniform buffer contains the viewport size, and we transform in the vertex shader.\n"
+    "  float2 rcp_viewport_size_mul2;\n"
+    "}};\n"
+    "\n"
+    "INPUT_DECL_BEGIN\n"
+    "  DECL_INPUT_CB_UTILITY\n"
+    "INPUT_DECL_END\n");
+  EmitVertexInputsAndOutputs(code, 1, 1, true, 1, 1);
+  code.Write("DECL_MAIN\n"
+             "{{\n"
+             "  OUTPUT(v_tex0) = float3(INPUT(rawtex0.xy), 0.0);\n"
+             "  OUTPUT(v_col0) = INPUT(rawcolor0);\n"
+             "  opos = float4(INPUT(rawpos.x) * CB_UTILITY(rcp_viewport_size_mul2.x) - 1.0,\n"
+             "                1.0 - INPUT(rawpos.y) * CB_UTILITY(rcp_viewport_size_mul2.y),\n"
+             "                0.0, 1.0);\n"
+             "  FIXUP_OPOS_VK;\n"
+             "}}\n");
   return code.GetBuffer();
 }
 
 std::string GenerateImGuiPixelShader()
 {
   ShaderCode code;
-  EmitSamplerDeclarations(code, 0, 1, false);
-  EmitPixelMainDeclaration(code, 1, 1);
-  code.Write("{{\n"
-             "  ocol0 = ");
-  EmitSampleTexture(code, 0, "float3(v_tex0.xy, 0.0)");
-  code.Write(" * v_col0;\n"
+  code.Write("// SHADER_SUPPORTS_MSL\n"
+             "INPUT_DECL_BEGIN\n"
+             "  DECL_INPUT_TEXTURE(tex0, 0)\n"
+             "  DECL_INPUT_SAMPLER(samp0, 0)\n"
+             "INPUT_DECL_END\n\n");
+  EmitPixelInputsAndOutputs(code, 1, 1);
+  code.Write("DECL_MAIN\n"
+             "{{\n"
+             "  ocol0 = TEXTURE_SAMPLE_LAYER(tex0, samp0, INPUT(v_tex0.xy), 0) * INPUT(v_col0);\n"
              "}}\n");
-
   return code.GetBuffer();
 }
 

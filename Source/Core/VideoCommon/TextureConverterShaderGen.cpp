@@ -27,66 +27,43 @@ TCShaderUid GetShaderUid(EFBCopyFormat dst_format, bool is_depth_copy, bool is_i
   return out;
 }
 
-static void WriteHeader(APIType api_type, ShaderCode& out)
+static void WriteHeader(ShaderCode& out)
 {
-  if (api_type == APIType::D3D)
-  {
-    out.Write("cbuffer PSBlock : register(b0) {{\n"
-              "  float2 src_offset, src_size;\n"
-              "  float3 filter_coefficients;\n"
-              "  float gamma_rcp;\n"
-              "  float2 clamp_tb;\n"
-              "  float pixel_height;\n"
-              "}};\n\n");
-  }
-  else if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
-  {
-    out.Write("UBO_BINDING(std140, 1) uniform PSBlock {{\n"
-              "  float2 src_offset, src_size;\n"
-              "  float3 filter_coefficients;\n"
-              "  float gamma_rcp;\n"
-              "  float2 clamp_tb;\n"
-              "  float pixel_height;\n"
-              "}};\n");
-  }
+  out.Write("DECL_CB_UTILITY {{\n"
+            "  float2 src_offset, src_size;\n"
+            "  packed_float3 filter_coefficients;\n"
+            "  float gamma_rcp;\n"
+            "  float2 clamp_tb;\n"
+            "  float pixel_height;\n"
+            "}};\n\n");
 }
 
 ShaderCode GenerateVertexShader(APIType api_type)
 {
   ShaderCode out;
-  WriteHeader(api_type, out);
+  WriteHeader(out);
 
-  if (api_type == APIType::D3D)
-  {
-    out.Write("void main(in uint id : SV_VertexID, out float3 v_tex0 : TEXCOORD0,\n"
-              "          out float4 opos : SV_Position) {{\n");
-  }
-  else if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
-  {
-    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
-    {
-      out.Write("VARYING_LOCATION(0) out VertexData {{\n"
-                "  float3 v_tex0;\n"
-                "}};\n");
-    }
-    else
-    {
-      out.Write("VARYING_LOCATION(0) out float3 v_tex0;\n");
-    }
-    out.Write("#define id gl_VertexID\n"
-              "#define opos gl_Position\n"
-              "void main() {{\n");
-  }
-  out.Write("  v_tex0 = float3(float((id << 1) & 2), float(id & 2), 0.0f);\n");
-  out.Write(
-      "  opos = float4(v_tex0.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n");
-  out.Write("  v_tex0 = float3(src_offset + (src_size * v_tex0.xy), 0.0f);\n");
+  out.Write(R"(
+INPUT_DECL_BEGIN
+  DECL_INPUT_CB_UTILITY
+INPUT_DECL_END
 
-  // NDC space is flipped in Vulkan
-  if (api_type == APIType::Vulkan)
-    out.Write("  opos.y = -opos.y;\n");
+VERTEX_INPUT_DECL_BEGIN
+  DECL_VERTEX_INPUT_VID
+VERTEX_INPUT_DECL_END
 
-  out.Write("}}\n");
+VERTEX_OUTPUT_DECL_BEGIN
+  DECL_VERTEX_OUTPUT_POSITION
+  DECL_VERTEX_OUTPUT(float3, v_tex0, TEXCOORD0, 0)
+VERTEX_OUTPUT_DECL_END
+
+DECL_MAIN {{
+  float3 tmp = float3(float((vid << 1) & 2), float(vid & 2), 0.0f);
+  opos = float4(tmp.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);
+  OUTPUT(v_tex0) = float3(CB_UTILITY(src_offset) + (CB_UTILITY(src_size) * tmp.xy), 0.0f);
+  FIXUP_OPOS_VK;
+}}
+)");
 
   return out;
 }
@@ -96,59 +73,55 @@ ShaderCode GeneratePixelShader(APIType api_type, const UidData* uid_data)
   const bool mono_depth = uid_data->is_depth_copy && g_ActiveConfig.bStereoEFBMonoDepth;
 
   ShaderCode out;
-  WriteHeader(api_type, out);
+  WriteHeader(out);
 
-  if (api_type == APIType::D3D)
-  {
-    out.Write("Texture2DArray tex0 : register(t0);\n"
-              "SamplerState samp0 : register(s0);\n"
-              "float4 SampleEFB(float3 uv, float y_offset) {{\n"
-              "  return tex0.Sample(samp0, float3(uv.x, clamp(uv.y + (y_offset * pixel_height), "
-              "clamp_tb.x, clamp_tb.y), {}));\n"
-              "}}\n\n",
-              mono_depth ? "0.0" : "uv.z");
-    out.Write("void main(in float3 v_tex0 : TEXCOORD0, out float4 ocol0 : SV_Target)\n{{\n");
-  }
-  else if (api_type == APIType::OpenGL || api_type == APIType::Vulkan || api_type == APIType::Metal)
-  {
-    out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n");
-    out.Write("float4 SampleEFB(float3 uv, float y_offset) {{\n"
-              "  return texture(samp0, float3(uv.x, clamp(uv.y + (y_offset * pixel_height), "
-              "clamp_tb.x, clamp_tb.y), {}));\n"
-              "}}\n",
-              mono_depth ? "0.0" : "uv.z");
-    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
-    {
-      out.Write("VARYING_LOCATION(0) in VertexData {{\n"
-                "  float3 v_tex0;\n"
-                "}};\n");
-    }
-    else
-    {
-      out.Write("VARYING_LOCATION(0) in vec3 v_tex0;\n");
-    }
-    out.Write("FRAGMENT_OUTPUT_LOCATION(0) out vec4 ocol0;\n"
-              "void main()\n{{\n");
-  }
+  out.Write(R"(
+INPUT_DECL_BEGIN
+  DECL_INPUT_CB_UTILITY
+  DECL_INPUT_{type}(tex0, 0)
+  DECL_INPUT_SAMPLER(samp0, 0)
+INPUT_DECL_END
+
+PIXEL_INPUT_DECL_BEGIN
+  DECL_PIXEL_INPUT(float3, v_tex0, TEXCOORD0, 0)
+PIXEL_INPUT_DECL_END
+
+PIXEL_OUTPUT_DECL_BEGIN
+  DECL_PIXEL_OUTPUT_COLOR0(float4)
+PIXEL_OUTPUT_DECL_END
+
+float4 SampleEFB(float3 uv, float y_offset) {{
+  float v = clamp(uv.y + (y_offset * CB_UTILITY(pixel_height)),
+                  CB_UTILITY(clamp_tb).x, CB_UTILITY(clamp_tb).y);
+  return {type}_SAMPLE(tex0, samp0, float3(uv.x, v, {layer}));
+}}
+
+DECL_MAIN {{
+)",
+            fmt::arg("layer", mono_depth ? "0.0" : "uv.z"),
+            fmt::arg("type", uid_data->is_depth_copy ? "DEPTH" : "TEXTURE"));
 
   // The copy filter applies to both color and depth copies. This has been verified on hardware.
   // The filter is only applied to the RGB channels, the alpha channel is left intact.
   if (uid_data->copy_filter)
   {
-    out.Write("  float4 prev_row = SampleEFB(v_tex0, -1.0f);\n"
-              "  float4 current_row = SampleEFB(v_tex0, 0.0f);\n"
-              "  float4 next_row = SampleEFB(v_tex0, 1.0f);\n"
-              "  float4 texcol = float4(min(prev_row.rgb * filter_coefficients[0] +\n"
-              "                               current_row.rgb * filter_coefficients[1] +\n"
-              "                               next_row.rgb * filter_coefficients[2], \n"
-              "                             float3(1, 1, 1)), current_row.a);\n");
+    out.Write(
+      "  float4 prev_row = SampleEFB(INPUT(v_tex0), -1.0f);\n"
+      "  float4 current_row = SampleEFB(INPUT(v_tex0), 0.0f);\n"
+      "  float4 next_row = SampleEFB(INPUT(v_tex0), 1.0f)\n"
+      "  float4 texcol = float4(min(prev_row.rgb * CB_UTILITY(filter_coefficients)[0] +\n"
+      "                               current_row.rgb * CB_UTILITY(filter_coefficients)[1] +\n"
+      "                               next_row.rgb * CB_UTILITY(filter_coefficients)[2],\n"
+      "                             float3(1, 1, 1)),\n"
+      "                         current_row.a);\n");
   }
   else
   {
     out.Write(
-        "  float4 current_row = SampleEFB(v_tex0, 0.0f);\n"
-        "  float4 texcol = float4(min(current_row.rgb * filter_coefficients[1], float3(1, 1, 1)),\n"
-        "                         current_row.a);\n");
+      "  float4 current_row = SampleEFB(INPUT(v_tex0), 0.0f);\n"
+      "  float4 texcol = float4(min(current_row.rgb * CB_UTILITY(filter_coefficients)[1],\n"
+      "                             float3(1, 1, 1)),\n"
+      "                         current_row.a);\n");
   }
 
   if (uid_data->is_depth_copy)
@@ -313,8 +286,8 @@ ShaderCode GeneratePixelShader(APIType api_type, const UidData* uid_data)
       break;
 
     case EFBCopyFormat::XFB:
-      out.Write(
-          "  ocol0 = float4(pow(texcol.rgb, float3(gamma_rcp, gamma_rcp, gamma_rcp)), 1.0f);\n");
+      out.Write("  ocol0 = float4(pow(texcol.rgb, float3(CB_UTILITY(gamma_rcp), "
+                "CB_UTILITY(gamma_rcp), CB_UTILITY(gamma_rcp))), 1.0f);\n");
       break;
 
     default:

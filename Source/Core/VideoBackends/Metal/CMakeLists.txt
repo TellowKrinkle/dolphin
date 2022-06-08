@@ -23,10 +23,6 @@ add_library(videometal
   VideoBackend.h
 )
 
-find_package(spirv_cross_core REQUIRED)
-find_package(spirv_cross_glsl REQUIRED)
-find_package(spirv_cross_cpp REQUIRED)
-find_package(spirv_cross_msl REQUIRED)
 find_library(METAL_LIBRARY Metal)
 find_library(QUARTZCORE_LIBRARY QuartzCore)
 
@@ -35,9 +31,6 @@ PUBLIC
   common
   videocommon
 PRIVATE
-  glslang
-  spirv-cross-cpp
-  spirv-cross-msl
   ${METAL_LIBRARY}
   ${QUARTZCORE_LIBRARY}
 )

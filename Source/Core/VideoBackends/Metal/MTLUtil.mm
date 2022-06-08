@@ -3,11 +3,6 @@
 
 #include "VideoBackends/Metal/MTLUtil.h"
 
-#include <SPIRV/GlslangToSpv.h>
-#include <StandAlone/ResourceLimits.h>
-#include <glslang/Public/ShaderLang.h>
-#include <SPIRV/disassemble.h>
-#include <spirv_msl.hpp>
 #include <fstream>
 #include <string>
 
@@ -101,14 +96,19 @@ void Metal::Util::PopulateBackendInfoFeatures(VideoConfig* config, id<MTLDevice>
   config->backend_info.bSupportsST3CTextures = supports_mac1;
   config->backend_info.bSupportsBPTCTextures = supports_mac1;
 #endif
-  g_features.subgroup_ops = true;
   if (char* env = getenv("MTL_UNIFIED_MEMORY"))
     g_features.unified_memory = env[0] == '1' || env[0] == 'y' || env[0] == 'Y';
-  else if (@available(macOS 10.15, iOS 13.0, *))
+  else if (@available(macOS 10.15, iOS 13, *))
     g_features.unified_memory = [device hasUnifiedMemory];
   else
     g_features.unified_memory = false;
 
+  g_features.subgroup_ops = false;
+  if (@available(macOS 10.15, iOS 13, *))
+  {
+    // Requires SIMD-scoped reduction operations
+    g_features.subgroup_ops = [device supportsFamily:MTLGPUFamilyMac2] || [device supportsFamily:MTLGPUFamilyApple6];
+  }
   if ([[device name] containsString:@"AMD"])
   {
     // Broken
@@ -156,292 +156,178 @@ MTLPixelFormat Metal::Util::FromAbstract(AbstractTextureFormat format)
   }
 }
 
-static const TBuiltInResource* GetCompilerResourceLimits()
+static const char MSL_SHADER_HEADER[] = R"(
+#include <metal_stdlib>
+using namespace metal;
+
+typedef metal::texture2d_array<float> main_texture;
+
+#define API_METAL_MSL
+#define INPUT_DECL_BEGIN struct Input {
+#define INPUT_DECL_END };
+#define VERTEX_INPUT_DECL_BEGIN struct StageData {
+#define VERTEX_INPUT_DECL_END };
+#define VERTEX_OUTPUT_DECL_BEGIN struct Output {
+#define VERTEX_OUTPUT_DECL_END };
+#define PIXEL_INPUT_DECL_BEGIN struct StageData {
+#define PIXEL_INPUT_DECL_END };
+#define PIXEL_OUTPUT_DECL_BEGIN struct Output {
+#define PIXEL_OUTPUT_DECL_END };
+
+#define DECL_CB_PS struct PSUniform
+#define DECL_CB_VS struct VSUniform
+#define DECL_CB_UTILITY struct UtilityUniform
+#define DECL_INPUT_CB_PS constant PSUniform& cb_ps [[buffer(0)]];
+#define DECL_INPUT_CB_VS constant VSUniform& cb_vs [[buffer(1)]];
+#define DECL_INPUT_CB_UTILITY constant UtilityUniform& cb_util [[buffer(1)]];
+#define DECL_INPUT_TEXTURE(name, binding)               main_texture                         name [[texture(binding)]];
+#define DECL_INPUT_TEXTURE_ARRAY(name, binding, length) metal::array<main_texture, length>   name [[texture(binding)]];
+#define DECL_INPUT_TEXTURE_MS(name, binding)            metal::texture2d_ms_array<float>     name [[texture(binding)]];
+#define DECL_INPUT_DEPTH(name, binding)                 metal::depth2d_array<float>          name [[texture(binding)]];
+#define DECL_INPUT_DEPTH_MS(name, binding)              metal::depth2d_ms_array<float>       name [[texture(binding)]];
+#define DECL_INPUT_SAMPLER(name, binding)               metal::sampler                       name [[sampler(binding)]];
+#define DECL_INPUT_SAMPLER_ARRAY(name, binding, length) metal::array<metal::sampler, length> name [[sampler(binding)]];
+#define DECL_INPUT_TEXEL_BUFFER(type, name, binding)    device const type*                   name [[buffer((binding) + 4)]];
+#define DECL_VERTEX_INPUT(type, name, semantic, binding) type name [[attribute(binding)]];
+#define DECL_VERTEX_OUTPUT(type, name, semantic, binding) type name [[user(semantic)]];
+#define DECL_VERTEX_INPUT_VID
+#define DECL_VERTEX_OUTPUT_POSITION float4 position [[position]];
+#define DECL_VERTEX_OUTPUT_CLIPDIST [[clip_distance]] float clip_dist[2];
+#define DECL_VERTEX_OUTPUT_POINT_SIZE float point_size [[point_size]];
+#define DECL_PIXEL_INPUT(type, name, semantic, binding) type name [[user(semantic)]];
+#define DECL_PIXEL_INPUT_POSITION float4 position [[position]];
+#define DECL_PIXEL_INPUT_CLIPDIST
+#define DECL_PIXEL_INPUT_SAMPLE_IDX float4 sample_id [[sample_id]];
+#define DECL_PIXEL_INPUT_ARRAY_IDX(name) uint name [[render_target_array_index]];
+#define DECL_PIXEL_OUTPUT_COLOR0_UINT uint4 col0 [[color(0), index(0)]];
+#define DECL_PIXEL_OUTPUT_COLOR0(type) type col0 [[color(0), index(0)]];
+#define DECL_PIXEL_OUTPUT_COLOR1 float4 col1 [[color(0), index(1)]];
+#define DECL_PIXEL_OUTPUT_DEPTH float depth [[depth(any)]];
+
+#define DECL_MAIN void main()
+
+#define IN(type) thread const type&
+#define INOUT(type) thread type&
+#define TEX(member) input.member
+#define INPUT(member) stage_data.member
+#define OUTPUT(member) output.member
+#define opos output.position
+#define oclipDist0 output.clip_dist[0]
+#define oclipDist1 output.clip_dist[1]
+#define gl_PointSize output.point_size
+#define frag_coord stage_data.position
+#define gl_SampleID stage_data.sample_id
+#define ocol0 output.col0
+#define ocol1 output.col1
+#define odepth output.depth
+#define TEXTURE_SAMPLE(tex, sampler, coords) input.tex.sample(input.sampler, (coords).xy, uint(round((coords).z)))
+#define TEXTURE_SAMPLE_OFFSET(tex, sampler, coords, offset) input.tex.sample(input.sampler, (coords).xy, uint(round((coords).z)), offset)
+#define TEXTURE_SAMPLE_LAYER(tex, sampler, coords, layer) input.tex.sample(input.sampler, coords, layer)
+#define TEXTURE_SAMPLE_LAYER_BIAS(tex, sampler, coords, layer, biasval) input.tex.sample(input.sampler, coords, layer, metal::bias(biasval))
+#define TEXTURE_FETCH(tex, coords, layer) input.tex.read(uint2(coords), layer)
+#define TEXTURE_FETCH_LOD(tex, coords, layer, lod) input.tex.read(uint2(coords), layer, lod)
+#define TEXTURE_FETCH_MS(tex, coords, layer, sample) input.tex.read(uint2(coords), layer, sample)
+#define DEPTH_SAMPLE(tex, sampler, coords) float4(input.tex.sample(input.sampler, (coords).xy, uint(round((coords).z))))
+#define DEPTH_FETCH_MS(tex, coords, layer, sample) float4(input.tex.read(uint2(coords), layer, sample))
+#define TEXEL_BUFFER_FETCH_1(tex, index, offset) input.tex[index]
+#define CB_PS(member) input.cb_ps.member
+#define CB_VS(member) input.cb_vs.member
+#define CB_UTILITY(member) input.cb_util.member
+
+#define bitfieldExtract metal::extract_bits
+#define roundEven metal::rint
+#define frac metal::fract
+#define lerp metal::mix
+#define dFdx metal::dfdx
+#define dFdy metal::dfdy
+#define UNREACHABLE __builtin_unreachable();
+#define MAYBE_UNUSED [[maybe_unused]]
+#define BOOL uint
+#define discard discard_fragment()
+
+#define FIXUP_OPOS opos.y = -opos.y
+#define FIXUP_OPOS_VK
+
+struct Main
 {
-  return &glslang::DefaultTBuiltInResource;
-}
-
-static bool InitializeGlslang()
-{
-  static bool glslang_initialized = false;
-  if (glslang_initialized)
-    return true;
-
-  if (!glslang::InitializeProcess())
-  {
-    PanicAlertFmt("Failed to initialize glslang shader compiler");
-    return false;
-  }
-
-  std::atexit([]() { glslang::FinalizeProcess(); });
-
-  glslang_initialized = true;
-  return true;
-}
-
-static const char SHADER_HEADER[] = R"(
-  // Target GLSL 4.5.
-  #version 450 core
-  #define ATTRIBUTE_LOCATION(x) layout(location = x)
-  #define FRAGMENT_OUTPUT_LOCATION(x) layout(location = x)
-  #define FRAGMENT_OUTPUT_LOCATION_INDEXED(x, y) layout(location = x, index = y)
-  #define UBO_BINDING(packing, x) layout(packing, set = 0, binding = (x - 1))
-  #define SAMPLER_BINDING(x) layout(set = 1, binding = x)
-  #define TEXEL_BUFFER_BINDING(x) layout(set = 1, binding = (x + 8))
-  #define SSBO_BINDING(x) layout(set = 2, binding = x)
-  #define INPUT_ATTACHMENT_BINDING(x, y, z) layout(set = x, binding = y, input_attachment_index = z)
-  #define VARYING_LOCATION(x) layout(location = x)
-  #define FORCE_EARLY_Z layout(early_fragment_tests) in
-
-  // Metal framebuffer fetch helpers.
-  #define FB_FETCH_VALUE subpassLoad(in_ocol0)
-
-  // hlsl to glsl function translation
-  #define API_METAL_SPV 1
-  #define float2 vec2
-  #define float3 vec3
-  #define float4 vec4
-  #define uint2 uvec2
-  #define uint3 uvec3
-  #define uint4 uvec4
-  #define int2 ivec2
-  #define int3 ivec3
-  #define int4 ivec4
-  #define frac fract
-  #define lerp mix
-
-  // These were changed in Vulkan
-  #define gl_VertexID gl_VertexIndex
-  #define gl_InstanceID gl_InstanceIndex
 )";
-static const char COMPUTE_SHADER_HEADER[] = R"(
-  // Target GLSL 4.5.
-  #version 450 core
-  // All resources are packed into one descriptor set for compute.
-  #define UBO_BINDING(packing, x) layout(packing, set = 0, binding = (x - 1))
-  #define SAMPLER_BINDING(x) layout(set = 0, binding = (1 + x))
-  #define TEXEL_BUFFER_BINDING(x) layout(set = 0, binding = (3 + x))
-  #define IMAGE_BINDING(format, x) layout(format, set = 0, binding = (5 + x))
 
-  // hlsl to glsl function translation
-  #define API_METAL_SPV 1
-  #define float2 vec2
-  #define float3 vec3
-  #define float4 vec4
-  #define uint2 uvec2
-  #define uint3 uvec3
-  #define uint4 uvec4
-  #define int2 ivec2
-  #define int3 ivec3
-  #define int4 ivec4
-  #define frac fract
-  #define lerp mix
-)";
-static const char SUBGROUP_HELPER_HEADER[] = R"(
-  #extension GL_KHR_shader_subgroup_basic : enable
-  #extension GL_KHR_shader_subgroup_arithmetic : enable
-  #extension GL_KHR_shader_subgroup_ballot : enable
+static const char MSL_SHADER_FOOTER_VERTEX[] = R"(
+  uint vid;
+  thread StageData& stage_data;
+  thread Input& input;
+  Output output;
+  Main(uint vid, thread StageData& stage_data, thread Input& input): vid(vid), stage_data(stage_data), input(input) {}
+};
 
-  #define SUPPORTS_SUBGROUP_REDUCTION 1
-  #define CAN_USE_SUBGROUP_REDUCTION true
-  #define IS_HELPER_INVOCATION gl_HelperInvocation
-  #define IS_FIRST_ACTIVE_INVOCATION (gl_SubgroupInvocationID == subgroupBallotFindLSB(subgroupBallot(!gl_HelperInvocation)))
-  #define SUBGROUP_MIN(value) value = subgroupMin(value)
-  #define SUBGROUP_MAX(value) value = subgroupMax(value)
-)";
-
-using SPIRVCodeType = u32;
-using SPIRVCodeVector = std::vector<SPIRVCodeType>;
-
-static std::optional<SPIRVCodeVector> CompileShaderToSPV(EShLanguage stage,
-                                                         const char* stage_filename,
-                                                         std::string_view source,
-                                                         std::string_view header)
+vertex Main::Output main0(uint vid [[vertex_id]], Main::StageData stage_data [[stage_in]], Main::Input input)
 {
-  if (!InitializeGlslang())
-    return std::nullopt;
-
-  std::unique_ptr<glslang::TShader> shader = std::make_unique<glslang::TShader>(stage);
-  std::unique_ptr<glslang::TProgram> program;
-  glslang::TShader::ForbidIncluder includer;
-  EProfile profile = ECoreProfile;
-  EShMessages messages =
-      static_cast<EShMessages>(EShMsgDefault | EShMsgSpvRules | EShMsgVulkanRules);
-  int default_version = 450;
-
-  std::string full_source_code;
-  const char* pass_source_code = source.data();
-  int pass_source_code_length = static_cast<int>(source.size());
-  if (!header.empty())
-  {
-    constexpr size_t subgroup_helper_header_length = std::size(SUBGROUP_HELPER_HEADER) - 1;
-    full_source_code.reserve(header.size() + subgroup_helper_header_length + source.size());
-    full_source_code.append(header);
-
-    if (Metal::g_features.subgroup_ops)
-      full_source_code.append(SUBGROUP_HELPER_HEADER, subgroup_helper_header_length);
-    full_source_code.append(source);
-    pass_source_code = full_source_code.c_str();
-    pass_source_code_length = static_cast<int>(full_source_code.length());
-  }
-
-  // Sub-group operations require Vulkan 1.1 and SPIR-V 1.3.
-  shader->setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_3);
-
-  shader->setStringsWithLengths(&pass_source_code, &pass_source_code_length, 1);
-
-  auto DumpBadShader = [&](const char* msg) {
-    static int counter = 0;
-    std::string filename = fmt::format("/tmp/BadShader_{}_{}.txt", stage_filename, counter++);
-    std::ofstream stream(filename);
-    if (stream.good())
-    {
-      stream << full_source_code << std::endl;
-      stream << msg << std::endl;
-      stream << "Shader Info Log:" << std::endl;
-      stream << shader->getInfoLog() << std::endl;
-      stream << shader->getInfoDebugLog() << std::endl;
-      if (program)
-      {
-        stream << "Program Info Log:" << std::endl;
-        stream << program->getInfoLog() << std::endl;
-        stream << program->getInfoDebugLog() << std::endl;
-      }
-    }
-    stream.close();
-
-    PanicAlertFmt("{} (written to {})\nDebug info:\n{}", msg, filename, shader->getInfoLog());
-  };
-
-  if (!shader->parse(GetCompilerResourceLimits(), default_version, profile, false, true, messages,
-                     includer))
-  {
-    DumpBadShader("Failed to parse shader");
-    return std::nullopt;
-  }
-
-  // Even though there's only a single shader, we still need to link it to generate SPV
-  program = std::make_unique<glslang::TProgram>();
-  program->addShader(shader.get());
-  if (!program->link(messages))
-  {
-    DumpBadShader("Failed to link program");
-    return std::nullopt;
-  }
-
-  glslang::TIntermediate* intermediate = program->getIntermediate(stage);
-  if (!intermediate)
-  {
-    DumpBadShader("Failed to generate SPIR-V");
-    return std::nullopt;
-  }
-
-  SPIRVCodeVector out_code;
-  spv::SpvBuildLogger logger;
-  glslang::SpvOptions options;
-
-  if (g_ActiveConfig.bEnableValidationLayer)
-  {
-    // Attach the source code to the SPIR-V for tools like RenderDoc.
-    intermediate->addSourceText(pass_source_code, pass_source_code_length);
-
-    options.generateDebugInfo = true;
-    options.disableOptimizer = true;
-    options.optimizeSize = false;
-    options.disassemble = false;
-    options.validate = true;
-  }
-
-  glslang::GlslangToSpv(*intermediate, out_code, &logger, &options);
-
-  // Write out messages
-  // Temporary: skip if it contains "Warning, version 450 is not yet complete; most version-specific
-  // features are present, but some are missing."
-  if (strlen(shader->getInfoLog()) > 108)
-    WARN_LOG_FMT(VIDEO, "Shader info log: {}", shader->getInfoLog());
-  if (strlen(shader->getInfoDebugLog()) > 0)
-    WARN_LOG_FMT(VIDEO, "Shader debug info log: {}", shader->getInfoDebugLog());
-  if (strlen(program->getInfoLog()) > 25)
-    WARN_LOG_FMT(VIDEO, "Program info log: {}", program->getInfoLog());
-  if (strlen(program->getInfoDebugLog()) > 0)
-    WARN_LOG_FMT(VIDEO, "Program debug info log: {}", program->getInfoDebugLog());
-  const std::string spv_messages = logger.getAllMessages();
-  if (!spv_messages.empty())
-    WARN_LOG_FMT(VIDEO, "SPIR-V conversion messages: {}", spv_messages);
-
-  // Dump source code of shaders out to file if enabled.
-  if (g_ActiveConfig.iLog & CONF_SAVESHADERS)
-  {
-    static int counter = 0;
-    std::string filename = fmt::format("Shader_{}_{}.txt", stage_filename, counter++);
-
-    std::ofstream stream(filename);
-    if (stream.good())
-    {
-      stream << full_source_code << std::endl;
-      stream << "Shader Info Log:" << std::endl;
-      stream << shader->getInfoLog() << std::endl;
-      stream << shader->getInfoDebugLog() << std::endl;
-      stream << "Program Info Log:" << std::endl;
-      stream << program->getInfoLog() << std::endl;
-      stream << program->getInfoDebugLog() << std::endl;
-      stream << "SPIR-V conversion messages: " << std::endl;
-      stream << spv_messages;
-      stream << "SPIR-V:" << std::endl;
-      spv::Disassemble(stream, out_code);
-    }
-  }
-
-  return out_code;
+  Main main(vid, stage_data, input);
+  main.main();
+  return main.output;
 }
+)";
 
-std::string Metal::Util::CompileShader(ShaderStage stage, std::string_view source)
+static const char MSL_SHADER_FOOTER_FRAGMENT[] = R"(
+  thread StageData& stage_data;
+  thread Input& input;
+  Output output;
+#ifdef USE_FRAMEBUFFER_FETCH
+  decltype(Output::col0) initial_ocol0;
+#endif
+  Main(thread StageData& stage_data, thread Input& input): stage_data(stage_data), input(input) {}
+};
+
+#ifdef FORCE_EARLY_Z
+[[early_fragment_tests]]
+#endif
+fragment Main::Output main0(
+#ifdef USE_FRAMEBUFFER_FETCH
+  decltype(Main::Output::col0) cin [[color(0)]],
+#endif
+  Main::StageData stage_data [[stage_in]],
+  Main::Input input)
 {
-  std::optional<SPIRVCodeVector> code;
+  Main main(stage_data, input);
+#ifdef USE_FRAMEBUFFER_FETCH
+  main.initial_ocol0 = cin;
+#endif
+  main.main();
+  return main.output;
+}
+)";
+
+static const char MSL_SHADER_FOOTER_COMPUTE[] = R"(
+  thread Input& input;
+  Main(thread Input& input): input(input) {}
+};
+
+kernel void main0(Main::Input input)
+{
+  Main main(input);
+  main.main();
+}
+)";
+
+std::string Metal::Util::PrepareMSLShader(ShaderStage stage, std::string_view source)
+{
+  std::string output(MSL_SHADER_HEADER);
+  output.append(source);
   switch (stage)
   {
     case ShaderStage::Vertex:
-      code = CompileShaderToSPV(EShLangVertex, "vs", source, SHADER_HEADER);
+      output.append(MSL_SHADER_FOOTER_VERTEX);
       break;
     case ShaderStage::Geometry:
-      code = CompileShaderToSPV(EShLangGeometry, "gs", source, SHADER_HEADER);
+      PanicAlertFmt("Attempted to compile Metal geometry shader, but Metal doesn't support geometry shaders!");
       break;
     case ShaderStage::Pixel:
-      code = CompileShaderToSPV(EShLangFragment, "ps", source, SHADER_HEADER);
+      output.append(MSL_SHADER_FOOTER_FRAGMENT);
       break;
     case ShaderStage::Compute:
-      code = CompileShaderToSPV(EShLangCompute, "cs", source, COMPUTE_SHADER_HEADER);
+      output.append(MSL_SHADER_FOOTER_COMPUTE);
       break;
   }
-  if (!code)
-    return "";
 
-  static const spirv_cross::MSLResourceBinding resource_bindings[] = {
-    {spv::ExecutionModelVertex,   0, 0, 0, 1, 0, 0}, // vs/ubo
-    {spv::ExecutionModelVertex,   0, 1, 0, 1, 0, 0}, // vs/ubo
-    {spv::ExecutionModelFragment, 0, 0, 0, 0, 0, 0}, // vs/ubo
-    {spv::ExecutionModelFragment, 0, 1, 0, 1, 0, 0}, // vs/ubo
-    {spv::ExecutionModelFragment, 1, 0, 0, 0, 0, 0}, // ps/samp0
-    {spv::ExecutionModelFragment, 1, 1, 0, 0, 1, 1}, // ps/samp1
-    {spv::ExecutionModelFragment, 1, 2, 0, 0, 2, 2}, // ps/samp2
-    {spv::ExecutionModelFragment, 1, 3, 0, 0, 3, 3}, // ps/samp3
-    {spv::ExecutionModelFragment, 1, 4, 0, 0, 4, 4}, // ps/samp4
-    {spv::ExecutionModelFragment, 1, 5, 0, 0, 5, 5}, // ps/samp5
-    {spv::ExecutionModelFragment, 1, 6, 0, 0, 6, 6}, // ps/samp6
-    {spv::ExecutionModelFragment, 1, 7, 0, 0, 7, 7}, // ps/samp7
-    {spv::ExecutionModelFragment, 1, 8, 0, 0, 8, 8}, // ps/samp8
-    {spv::ExecutionModelFragment, 2, 0, 0, 2, 0, 0}  // ps/ssbo(bbox)
-  };
-
-  spirv_cross::CompilerMSL compiler(std::move(*code));
-
-  spirv_cross::CompilerMSL::Options options;
-  options.platform = spirv_cross::CompilerMSL::Options::macOS;
-  options.set_msl_version(2, 2);
-  compiler.set_msl_options(options);
-
-  for (auto& binding : resource_bindings)
-    compiler.add_msl_resource_binding(binding);
-
-  return compiler.compile();
+  return output;
 }
