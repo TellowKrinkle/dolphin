@@ -143,7 +143,7 @@ GetVulkanAttachmentBlendState(const BlendingState& state, AbstractPipelineUsage 
   bool use_shader_blend = !use_dual_source && state.usedualsrc && state.dstalpha &&
                           g_ActiveConfig.backend_info.bSupportsFramebufferFetch;
 
-  if (use_shader_blend || (usage == AbstractPipelineUsage::GX &&
+  if (use_shader_blend || (usage != AbstractPipelineUsage::Utility &&
                            DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DISCARD_WITH_EARLY_Z)))
   {
     vk_state.blendEnable = VK_FALSE;
@@ -260,6 +260,7 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
   VkPipelineLayout pipeline_layout;
   switch (config.usage)
   {
+  case AbstractPipelineUsage::Uber:
   case AbstractPipelineUsage::GX:
     pipeline_layout = g_object_cache->GetPipelineLayout(PIPELINE_LAYOUT_STANDARD);
     break;

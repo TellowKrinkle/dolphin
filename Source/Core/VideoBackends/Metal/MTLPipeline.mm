@@ -5,6 +5,25 @@
 
 #include "Common/MsgHandler.h"
 
+#include "VideoCommon/NativeVertexFormat.h"
+
+template <size_t N>
+static void Populate(u32* offsets, const AttributeFormat (&format)[N], bool needs_components)
+{
+  for (size_t i = 0; i < N; i++)
+    offsets[i] = format[i].offset | (needs_components ? format[i].components << 16 : 0);
+}
+
+Metal::UberShaderVertexAttributes::UberShaderVertexAttributes(const PortableVertexDeclaration& fmt)
+{
+  stride = fmt.stride;
+  offsets[SHADER_POSITION_ATTRIB] = fmt.position.offset | (fmt.position.components << 16);
+  offsets[SHADER_POSMTX_ATTRIB] = fmt.posmtx.offset;
+  Populate(offsets + SHADER_NORMAL_ATTRIB, fmt.normals, false);
+  Populate(offsets + SHADER_COLOR0_ATTRIB, fmt.colors, false);
+  Populate(offsets + SHADER_TEXTURE0_ATTRIB, fmt.texcoords, true);
+}
+
 static void MarkAsUsed(u32* list, u32 start, u32 length)
 {
   for (u32 i = start; i < start + length; i++)
@@ -46,12 +65,14 @@ static void GetArguments(NSArray<MTLArgument*>* arguments, u32* textures, u32* s
   }
 }
 
-Metal::Pipeline::Pipeline(MRCOwned<id<MTLRenderPipelineState>> pipeline, MTLRenderPipelineReflection* reflection, MTLPrimitiveType prim, MTLCullMode cull, DepthState depth, AbstractPipelineUsage usage)
+Metal::Pipeline::Pipeline(MRCOwned<id<MTLRenderPipelineState>> pipeline, MTLRenderPipelineReflection* reflection,
+    MTLPrimitiveType prim, MTLCullMode cull, DepthState depth, AbstractPipelineUsage usage, UberShaderVertexAttributes attributes)
   : m_pipeline(std::move(pipeline))
   , m_prim(prim)
   , m_cull(cull)
   , m_dss(depth)
   , m_usage(usage)
+  , m_attributes(attributes)
 {
   GetArguments([reflection vertexArguments], nullptr, nullptr, &m_vertex_buffers);
   GetArguments([reflection fragmentArguments], &m_textures, &m_samplers, &m_fragment_buffers);

@@ -44,24 +44,126 @@ ShaderCode GenVertexShader(APIType api_type, const ShaderHostConfig& host_config
             "}};\n",
             s_shader_uniforms);
 
-  out.Write("INPUT_DECL_BEGIN\n"
-            "  DECL_INPUT_CB_VS\n"
-            "INPUT_DECL_END\n\n");
-
-  out.Write("VERTEX_INPUT_DECL_BEGIN\n");
-  out.Write("  DECL_VERTEX_INPUT(float4, rawpos, POSITION, {})\n", SHADER_POSITION_ATTRIB);
-  out.Write("  DECL_VERTEX_INPUT(uint4, posmtx, BLENDINDICES, {})\n", SHADER_POSMTX_ATTRIB);
-  out.Write("  DECL_VERTEX_INPUT(float3, rawnormal, NORMAL, {})\n", SHADER_NORMAL_ATTRIB);
-  out.Write("  DECL_VERTEX_INPUT(float3, rawtangent, TANGENT, {})\n", SHADER_TANGENT_ATTRIB);
-  out.Write("  DECL_VERTEX_INPUT(float3, rawbinormal, BINORMAL, {})\n", SHADER_BINORMAL_ATTRIB);
-  out.Write("  DECL_VERTEX_INPUT(float4, rawcolor0, COLOR0, {})\n", SHADER_COLOR0_ATTRIB);
-  out.Write("  DECL_VERTEX_INPUT(float4, rawcolor1, COLOR1, {})\n", SHADER_COLOR1_ATTRIB);
-  for (int i = 0; i < 8; i++)
+  if (api_type == APIType::Metal)
   {
-    out.Write("  DECL_VERTEX_INPUT(float3, rawtex{}, TEXCOORD{}, {})\n",
-              i, i, SHADER_TEXTURE0_ATTRIB + i);
+    // Metal uses a dynamic vertex fetch routine to avoid needing to compile separate pipelines
+    //   for each vertex layout
+    out.Write(R"(
+struct VertexLayoutMetadata {{
+  uint offsets[{nattributes}];
+  uint stride;
+}};
+
+INPUT_DECL_BEGIN
+  DECL_INPUT_CB_VS
+  device const void* vertex_data [[buffer(0)]];
+  constant VertexLayoutMetadata& vertex_layout [[buffer(2)]];
+INPUT_DECL_END
+VERTEX_INPUT_DECL_BEGIN
+  DECL_VERTEX_INPUT_VID
+VERTEX_INPUT_DECL_END
+
+template <typename T, typename U> struct InputAttribute {{ uint idx; }};
+
+device const void* GetInputPtr(uint offset)
+{{
+  uint full_offset = input.vertex_layout.stride * vid + offset;
+  return static_cast<device const void*>(static_cast<device const char*>(input.vertex_data) + full_offset);
+}}
+
+float4 GetInput(InputAttribute<float4, float> marker)
+{{
+  uint info = input.vertex_layout.offsets[marker.idx];
+  device const float* ptr = static_cast<device const float*>(GetInputPtr(info & 0xffff));
+  switch (info >> 16)
+  {{
+    case 4u: return float4(ptr[0], ptr[1], ptr[2], ptr[3]);
+    case 3u: return float4(ptr[0], ptr[1], ptr[2], 1.0f);
+    case 2u: return float4(ptr[0], ptr[1], 0.0f, 1.0f);
+    case 1u: return float4(ptr[0], 0.0f, 0.0f, 1.0f);
+    default: return float4(0.0f, 0.0f, 0.0f, 1.0f);
+  }}
+}}
+
+float3 GetInput(InputAttribute<float3, float> marker)
+{{
+  uint info = input.vertex_layout.offsets[marker.idx];
+  device const float* ptr = static_cast<device const float*>(GetInputPtr(info & 0xffff));
+  switch (info >> 16)
+  {{
+    case 3u: return float3(ptr[0], ptr[1], ptr[2]);
+    case 2u: return float3(ptr[0], ptr[1], 0.0f);
+    case 1u: return float3(ptr[0], 0.0f, 0.0f);
+    default: return float3(0.0f, 0.0f, 0.0f);
+  }}
+}}
+
+template <uint N>
+vec<float, N> GetInput(InputAttribute<vec<float, N>, vec<float, N>> marker)
+{{
+  device const void* ptr = GetInputPtr(input.vertex_layout.offsets[marker.idx]);
+  return *static_cast<device const vec<float, N>*>(ptr);
+}}
+
+template <uint N>
+vec<float, N> GetInput(InputAttribute<vec<float, N>, vec<uchar, N>> marker)
+{{
+  device const void* ptr = GetInputPtr(input.vertex_layout.offsets[marker.idx]);
+  return vec<float, N>(*static_cast<device const vec<uchar, N>*>(ptr)) / 255.0f;
+}}
+
+template <uint N>
+vec<uint, N> GetInput(InputAttribute<vec<uint, N>, vec<uchar, N>> marker)
+{{
+  device const void* ptr = GetInputPtr(input.vertex_layout.offsets[marker.idx]);
+  return vec<uint, N>(*static_cast<device const vec<uchar, N>*>(ptr));
+}}
+
+#undef INPUT
+#define INPUT(name) GetInput(_iattr_##name)
+)", fmt::arg("nattributes", SHADER_TEXTURE7_ATTRIB + 1));
+
+    out.Write("static constexpr constant InputAttribute<float4, float> _iattr_rawpos{{{}}};\n",
+              SHADER_POSITION_ATTRIB);
+    out.Write("static constexpr constant InputAttribute<uint4, uchar4> _iattr_posmtx{{{}}};\n",
+              SHADER_POSMTX_ATTRIB);
+    out.Write("static constexpr constant InputAttribute<float3, float3> _iattr_rawnormal{{{}}};\n",
+              SHADER_NORMAL_ATTRIB);
+    out.Write("static constexpr constant InputAttribute<float3, float3> _iattr_rawtangent{{{}}};\n",
+              SHADER_TANGENT_ATTRIB);
+    out.Write("static constexpr constant InputAttribute<float3, float3> _iattr_rawbinormal{{{}}};\n",
+              SHADER_BINORMAL_ATTRIB);
+    out.Write("static constexpr constant InputAttribute<float4, uchar4> _iattr_rawcolor0{{{}}};\n",
+              SHADER_COLOR0_ATTRIB);
+    out.Write("static constexpr constant InputAttribute<float4, uchar4> _iattr_rawcolor1{{{}}};\n",
+              SHADER_COLOR1_ATTRIB);
+    for (int i = 0; i < 8; i++)
+    {
+      out.Write("static constexpr constant InputAttribute<float3, float> _iattr_rawtex{}{{{}}};\n",
+                i, SHADER_TEXTURE0_ATTRIB + i);
+    }
   }
-  out.Write("VERTEX_INPUT_DECL_END\n\n");
+  else
+  {
+    out.Write("INPUT_DECL_BEGIN\n"
+              "  DECL_INPUT_CB_VS\n"
+              "INPUT_DECL_END\n\n");
+
+    out.Write("VERTEX_INPUT_DECL_BEGIN\n");
+    out.Write("  DECL_VERTEX_INPUT(float4, rawpos, POSITION, {})\n", SHADER_POSITION_ATTRIB);
+    out.Write("  DECL_VERTEX_INPUT(uint4, posmtx, BLENDINDICES, {})\n", SHADER_POSMTX_ATTRIB);
+    out.Write("  DECL_VERTEX_INPUT(float3, rawnormal, NORMAL, {})\n", SHADER_NORMAL_ATTRIB);
+    out.Write("  DECL_VERTEX_INPUT(float3, rawtangent, TANGENT, {})\n", SHADER_TANGENT_ATTRIB);
+    out.Write("  DECL_VERTEX_INPUT(float3, rawbinormal, BINORMAL, {})\n", SHADER_BINORMAL_ATTRIB);
+    out.Write("  DECL_VERTEX_INPUT(float4, rawcolor0, COLOR0, {})\n", SHADER_COLOR0_ATTRIB);
+    out.Write("  DECL_VERTEX_INPUT(float4, rawcolor1, COLOR1, {})\n", SHADER_COLOR1_ATTRIB);
+    for (int i = 0; i < 8; i++)
+    {
+      out.Write("  DECL_VERTEX_INPUT(float3, rawtex{}, TEXCOORD{}, {})\n",
+                i, i, SHADER_TEXTURE0_ATTRIB + i);
+    }
+    out.Write("VERTEX_INPUT_DECL_END\n\n");
+  }
 
   const char* qualifier = GetInterpolationQualifier(api_type, msaa, ssaa);
   if (host_config.backend_geometry_shaders)

@@ -13,6 +13,7 @@
 
 #include "VideoBackends/Metal/MRCHelpers.h"
 #include "VideoBackends/Metal/MTLObjectCache.h"
+#include "VideoBackends/Metal/MTLPipeline.h"
 #include "VideoBackends/Metal/MTLTexture.h"
 #include "VideoBackends/Metal/MTLUtil.h"
 
@@ -20,8 +21,6 @@
 
 namespace Metal
 {
-class Pipeline;
-class ComputePipeline;
 
 class StateTracker
 {
@@ -170,6 +169,7 @@ private:
     struct
     {
       bool has_gx_vs_uniform      : 1;
+      bool has_gx_vs_uber_attrs   : 1;
       bool has_gx_ps_uniform      : 1;
       bool has_utility_vs_uniform : 1;
       bool has_utility_ps_uniform : 1;
@@ -229,6 +229,7 @@ private:
     id<MTLBuffer> indices = nullptr;
     u32 vertices_offset;
     u32 indices_offset;
+    UberShaderVertexAttributes uber_vertex_attrs;
   } m_state;
 
   size_t Align(size_t amt, AlignMask align) { return (amt + static_cast<size_t>(align)) & ~static_cast<size_t>(align); }

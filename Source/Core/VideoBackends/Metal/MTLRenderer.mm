@@ -302,7 +302,7 @@ std::unique_ptr<AbstractPipeline> Metal::Renderer::CreatePipeline(
   auto desc = MRCTransfer([MTLRenderPipelineDescriptor new]);
   [desc setVertexFunction:static_cast<const Shader*>(config.vertex_shader)->GetShader()];
   [desc setFragmentFunction:static_cast<const Shader*>(config.pixel_shader)->GetShader()];
-  if (config.vertex_format)
+  if (config.vertex_format && config.usage != AbstractPipelineUsage::Uber)
     [desc setVertexDescriptor:static_cast<const VertexFormat*>(config.vertex_format)->Get()];
   RasterizationState rs = config.rasterization_state;
   [desc setInputPrimitiveTopology:GetClass(rs.primitive)];
@@ -333,7 +333,7 @@ std::unique_ptr<AbstractPipeline> Metal::Renderer::CreatePipeline(
     [desc setStencilAttachmentPixelFormat:Util::FromAbstract(fs.depth_texture_format)];
   NSError* err = nullptr;
   MTLRenderPipelineReflection* reflection = nullptr;
-  bool is_gx = config.usage == AbstractPipelineUsage::GX;
+  bool is_gx = config.usage != AbstractPipelineUsage::Utility;
   [desc setLabel:[NSString stringWithFormat:@"%s Pipeline %d", is_gx ? "GX" : "Utility", m_pipeline_counter[is_gx]++]];
   id<MTLRenderPipelineState> pipe = [g_device
     newRenderPipelineStateWithDescriptor:desc
@@ -346,7 +346,13 @@ std::unique_ptr<AbstractPipeline> Metal::Renderer::CreatePipeline(
       [[[desc vertexFunction] name] UTF8String], [[[desc fragmentFunction] name] UTF8String], [[err localizedDescription] UTF8String]);
     return nullptr;
   }
-  return std::make_unique<Pipeline>(MRCTransfer(pipe), reflection, Convert(rs.primitive), Convert(rs.cullmode), config.depth_state, config.usage);
+
+  UberShaderVertexAttributes attributes = {};
+  if (config.usage == AbstractPipelineUsage::Uber && config.vertex_format)
+    attributes = UberShaderVertexAttributes(config.vertex_format->GetVertexDeclaration());
+
+  return std::make_unique<Pipeline>(MRCTransfer(pipe), reflection,
+    Convert(rs.primitive), Convert(rs.cullmode), config.depth_state, config.usage, attributes);
 }}
 
 void Metal::Renderer::Flush()

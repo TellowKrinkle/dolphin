@@ -32,6 +32,7 @@ class NativeVertexFormat;
 enum class AbstractPipelineUsage
 {
   GX,
+  Uber,
   Utility
 };
 
