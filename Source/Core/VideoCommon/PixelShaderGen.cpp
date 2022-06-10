@@ -661,8 +661,7 @@ uint WrapCoord(int coord, uint wrap, int size) {{
   }
   else if (api_type == APIType::Metal)
   {
-    out.Write("\nFORCE_INLINE\n"
-              "int4 sampleTexture(uint texmap, thread const main_texture& tex,\n"
+    out.Write("\nint4 sampleTexture(uint texmap, thread const main_texture& tex,\n"
               "                   thread const sampler& samp, int2 uv, int layer) {{\n");
   }
 
