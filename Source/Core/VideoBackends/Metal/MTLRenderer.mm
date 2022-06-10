@@ -333,6 +333,8 @@ std::unique_ptr<AbstractPipeline> Metal::Renderer::CreatePipeline(
     [desc setStencilAttachmentPixelFormat:Util::FromAbstract(fs.depth_texture_format)];
   NSError* err = nullptr;
   MTLRenderPipelineReflection* reflection = nullptr;
+  bool is_gx = config.usage == AbstractPipelineUsage::GX;
+  [desc setLabel:[NSString stringWithFormat:@"%s Pipeline %d", is_gx ? "GX" : "Utility", m_pipeline_counter[is_gx]++]];
   id<MTLRenderPipelineState> pipe = [g_device
     newRenderPipelineStateWithDescriptor:desc
                                  options:MTLPipelineOptionArgumentInfo
