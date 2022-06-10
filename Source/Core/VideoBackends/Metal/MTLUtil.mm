@@ -174,12 +174,16 @@ typedef metal::texture2d_array<float> main_texture;
 #define PIXEL_OUTPUT_DECL_BEGIN struct Output {
 #define PIXEL_OUTPUT_DECL_END };
 
+#define BIND_POINT_CB_VS 1
+#define BIND_POINT_CB_PS 0
+#define BIND_POINT_CB_UNIFORM 1
+
 #define DECL_CB_PS struct PSUniform
 #define DECL_CB_VS struct VSUniform
 #define DECL_CB_UTILITY struct UtilityUniform
-#define DECL_INPUT_CB_PS constant PSUniform& cb_ps [[buffer(0)]];
-#define DECL_INPUT_CB_VS constant VSUniform& cb_vs [[buffer(1)]];
-#define DECL_INPUT_CB_UTILITY constant UtilityUniform& cb_util [[buffer(1)]];
+#define DECL_INPUT_CB_PS constant PSUniform& cb_ps [[buffer(BIND_POINT_CB_PS)]];
+#define DECL_INPUT_CB_VS constant VSUniform& cb_vs [[buffer(BIND_POINT_CB_VS)]];
+#define DECL_INPUT_CB_UTILITY constant UtilityUniform& cb_util [[buffer(BIND_POINT_CB_UNIFORM)]];
 #define DECL_INPUT_TEXTURE(name, binding)               main_texture                         name [[texture(binding)]];
 #define DECL_INPUT_TEXTURE_ARRAY(name, binding, length) metal::array<main_texture, length>   name [[texture(binding)]];
 #define DECL_INPUT_TEXTURE_MS(name, binding)            metal::texture2d_ms_array<float>     name [[texture(binding)]];
@@ -286,8 +290,16 @@ fragment Main::Output main0(
   decltype(Main::Output::col0) cin [[color(0)]],
 #endif
   Main::StageData stage_data [[stage_in]],
-  Main::Input input)
+#ifdef CUSTOM_MAIN_INPUT
+  CUSTOM_MAIN_INPUT
+#else
+  Main::Input input
+#endif
+)
 {
+#ifdef CUSTOM_MAIN_SETUP
+  CUSTOM_MAIN_SETUP
+#endif
   Main main(stage_data, input);
 #ifdef USE_FRAMEBUFFER_FETCH
   main.initial_ocol0 = cin;

@@ -494,14 +494,12 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   out.Write("// Helper function for Alpha Test\n"
             "bool alphaCompare(int a, int b, uint compare) {{\n");
   WriteSwitch(out, api_type, "compare", tev_alpha_funcs_table, 2, false);
-  out.Write("  UNREACHABLE\n"
-            "}}\n"
+  out.Write("}}\n"
             "\n"
             "int3 selectColorInput(IN(State) s, IN(StageState) ss, float4 colors_0, float4 colors_1, "
             "uint index) {{\n");
   WriteSwitch(out, api_type, "index", tev_c_input_table, 2, false);
-  out.Write("  UNREACHABLE\n"
-            "}}\n"
+  out.Write("}}\n"
             "\n"
             "int selectAlphaInput(IN(State) s, IN(StageState) ss, float4 colors_0, float4 colors_1, "
             "uint index) {{\n");

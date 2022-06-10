@@ -416,46 +416,78 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType api_type,
               "}}\n\n", s_shader_uniforms);
   }
 
-  out.Write("INPUT_DECL_BEGIN\n");
-  out.Write("  DECL_INPUT_CB_PS\n");
-  if (host_config.per_pixel_lighting)
-    out.Write("  DECL_INPUT_CB_VS\n");
-  out.Write("  DECL_INPUT_TEXTURE_ARRAY(tex, 0, 8)\n"
-            "  DECL_INPUT_SAMPLER_ARRAY(samp, 0, 8)\n");
-  if (bounding_box)
+  if (api_type == APIType::Metal)
   {
-    switch (api_type)
+    // Metal shader compiler is dumb and generates terrible code if we ever copy a texture array and then dynamically index into it
+    // That includes the implicit copy into the input struct
+    // Use references instead
+    out.Write("INPUT_DECL_BEGIN\n"
+              "  thread array<main_texture, 8>& tex;\n"
+              "  thread array<sampler, 8>& samp;\n"
+              "  constant PSUniform& cb_ps;\n");
+    std::string main_inputs = "array<main_texture, 8> tex [[texture(0)]], "
+                              "array<sampler, 8> samp [[sampler(0)]], "
+                              "constant Main::PSUniform& cb_ps [[buffer(BIND_POINT_CB_PS)]]";
+    std::string main_copy = "tex, samp, cb_ps";
+    if (host_config.per_pixel_lighting)
     {
-      case APIType::OpenGL:
-      case APIType::Vulkan:
-        out.Write("  SSBO_BINDING(0) buffer BBox {{\n");
-
-        if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_SSBO_FIELD_ATOMICS))
-        {
-          // AMD drivers on Windows seemingly ignore atomic writes to fields or array elements of an
-          // SSBO other than the first one, but using an int4 seems to work fine
-          out.Write("    int4 bbox_data;\n");
-        }
-        else
-        {
-          // The Metal shader compiler fails to compile the atomic instructions when operating on
-          // individual components of a vector
-          out.Write("    int bbox_data[4];\n");
-        }
-
-        out.Write("  }};");
-        break;
-      case APIType::D3D:
-        out.Write("  globallycoherent RWBuffer<int> bbox_data : register(u2);\n");
-        break;
-      case APIType::Metal:
-        out.Write("  device int* bbox [[buffer(2)]];\n");
-        break;
-      case APIType::Nothing:
-        break;
+      out.Write("  constant VSUniform& cb_vs;\n");
+      main_inputs += ", constant Main::VSUniform& cb_vs [[buffer(BIND_POINT_CB_VS)]]";
+      main_copy += ", cb_vs";
     }
+    if (bounding_box)
+    {
+      out.Write("  device int* bbox;\n");
+      main_inputs += ", device int* bbox [[buffer(2)]]";
+      main_copy += ", bbox";
+    }
+    out.Write("INPUT_DECL_END\n");
+    out.Write("#define CUSTOM_MAIN_INPUT {}\n", main_inputs);
+    out.Write("#define CUSTOM_MAIN_SETUP Main::Input input{{{}}};\n\n", main_copy);
   }
-  out.Write("INPUT_DECL_END\n\n");
+  else
+  {
+    out.Write("INPUT_DECL_BEGIN\n");
+    out.Write("  DECL_INPUT_CB_PS\n");
+    if (host_config.per_pixel_lighting)
+      out.Write("  DECL_INPUT_CB_VS\n");
+    out.Write("  DECL_INPUT_TEXTURE_ARRAY(tex, 0, 8)\n"
+              "  DECL_INPUT_SAMPLER_ARRAY(samp, 0, 8)\n");
+    if (bounding_box)
+    {
+      switch (api_type)
+      {
+        case APIType::OpenGL:
+        case APIType::Vulkan:
+          out.Write("  SSBO_BINDING(0) buffer BBox {{\n");
+
+          if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_SSBO_FIELD_ATOMICS))
+          {
+            // AMD drivers on Windows seemingly ignore atomic writes to fields or array elements of an
+            // SSBO other than the first one, but using an int4 seems to work fine
+            out.Write("    int4 bbox_data;\n");
+          }
+          else
+          {
+            // The Metal shader compiler fails to compile the atomic instructions when operating on
+            // individual components of a vector
+            out.Write("    int bbox_data[4];\n");
+          }
+
+          out.Write("  }};");
+          break;
+        case APIType::D3D:
+          out.Write("  globallycoherent RWBuffer<int> bbox_data : register(u2);\n");
+          break;
+        case APIType::Metal:
+          out.Write("  device int* bbox [[buffer(2)]];\n");
+          break;
+        case APIType::Nothing:
+          break;
+      }
+    }
+    out.Write("INPUT_DECL_END\n\n");
+  }
 
   // dot product for integer vectors
   out.Write("int idot(int3 x, int3 y)\n"
