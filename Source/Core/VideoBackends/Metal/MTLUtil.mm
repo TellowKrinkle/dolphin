@@ -10,6 +10,7 @@
 
 #include "Common/MsgHandler.h"
 
+#include "VideoCommon/DriverDetails.h"
 #include "VideoCommon/Spirv.h"
 
 Metal::DeviceFeatures Metal::g_features;
@@ -81,6 +82,32 @@ void Metal::Util::PopulateBackendInfoAdapters(
 
 void Metal::Util::PopulateBackendInfoFeatures(VideoConfig* config, id<MTLDevice> device)
 {
+  // Initialize DriverDetails first so we can use it later
+  DriverDetails::Vendor vendor = DriverDetails::VENDOR_UNKNOWN;
+  if ([[device name] containsString:@"NVIDIA"])
+    vendor = DriverDetails::VENDOR_NVIDIA;
+  else if ([[device name] containsString:@"AMD"])
+    vendor = DriverDetails::VENDOR_ATI;
+  else if ([[device name] containsString:@"Intel"])
+    vendor = DriverDetails::VENDOR_INTEL;
+  else if ([[device name] containsString:@"Apple"])
+    vendor = DriverDetails::VENDOR_APPLE;
+  double version = 0;
+  if (@available(macOS 13, iOS 16, *))
+    version = 3.0;
+  else if (@available(macOS 12, iOS 15, *))
+    version = 2.4;
+  else if (@available(macOS 11, iOS 14, *))
+    version = 2.3;
+  else if (@available(macOS 10.15, iOS 13, *))
+    version = 2.2;
+  else if (@available(macOS 10.14, iOS 12, *))
+    version = 2.1;
+  else if (@available(macOS 10.13, iOS 11, *))
+    version = 2.0;
+  DriverDetails::Init(DriverDetails::API_METAL, vendor, DriverDetails::DRIVER_APPLE, version,
+                      DriverDetails::Family::UNKNOWN);
+
 #ifdef TARGET_OS_MAC
   config->backend_info.bSupportsDepthClamp = true;
   config->backend_info.bSupportsST3CTextures = true;
@@ -117,11 +144,8 @@ void Metal::Util::PopulateBackendInfoFeatures(VideoConfig* config, id<MTLDevice>
                            || [device supportsFamily:MTLGPUFamilyApple6];
     config->backend_info.bSupportsFramebufferFetch = [device supportsFamily:MTLGPUFamilyApple1];
   }
-  if ([[device name] containsString:@"AMD"])
-  {
-    // Broken
+  if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_SUBGROUP_INVOCATION_ID))
     g_features.subgroup_ops = false;
-  }
 }
 
 AbstractTextureFormat Metal::Util::ToAbstract(MTLPixelFormat format)
