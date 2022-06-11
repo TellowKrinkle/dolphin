@@ -869,7 +869,7 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
 #ifdef __APPLE__
   // Framebuffer fetch is only supported by Metal, so ensure that we're running Vulkan (MoltenVK)
   // if we want to use it.
-  if (api_type == APIType::Vulkan)
+  if (api_type == APIType::Vulkan || api_type == APIType::Metal)
   {
     if (use_dual_source)
     {
