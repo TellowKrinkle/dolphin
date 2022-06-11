@@ -915,6 +915,7 @@ uint GetTiledTexelOffset(uint2 block_size, uint2 coords)
   return buffer_pos;
 }
 
+#if defined(HAS_PALETTE)
 uint4 GetPaletteColor(uint index)
 {
   // Fetch and swap BE to LE.
@@ -959,6 +960,7 @@ float4 GetPaletteColorNormalized(uint index)
   uint4 color = GetPaletteColor(index);
   return float4(color) / 255.0;
 }
+#endif // defined(HAS_PALETTE)
 
 )";
 
@@ -1350,25 +1352,24 @@ std::pair<u32, u32> GetDispatchCount(const DecodingShaderInfo* info, u32 width, 
           (height + (info->group_size_y - 1)) / info->group_size_y};
 }
 
-std::string GenerateDecodingShader(TextureFormat format, TLUTFormat palette_format,
+std::string GenerateDecodingShader(const DecodingShaderInfo* info, TLUTFormat palette_format,
                                    APIType api_type)
 {
-  const DecodingShaderInfo* info = GetDecodingShaderInfo(format);
-  if (!info)
-    return "";
-
   std::ostringstream ss;
-  switch (palette_format)
+  if (info->palette_size != 0)
   {
-  case TLUTFormat::IA8:
-    ss << "#define PALETTE_FORMAT_IA8 1\n";
-    break;
-  case TLUTFormat::RGB565:
-    ss << "#define PALETTE_FORMAT_RGB565 1\n";
-    break;
-  case TLUTFormat::RGB5A3:
-    ss << "#define PALETTE_FORMAT_RGB5A3 1\n";
-    break;
+    switch (palette_format)
+    {
+    case TLUTFormat::IA8:
+      ss << "#define PALETTE_FORMAT_IA8 1\n";
+      break;
+    case TLUTFormat::RGB565:
+      ss << "#define PALETTE_FORMAT_RGB565 1\n";
+      break;
+    case TLUTFormat::RGB5A3:
+      ss << "#define PALETTE_FORMAT_RGB5A3 1\n";
+      break;
+    }
   }
 
   switch (info->buffer_format)

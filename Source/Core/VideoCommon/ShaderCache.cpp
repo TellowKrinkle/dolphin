@@ -1339,25 +1339,31 @@ const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat
   return iiter.first->second.get();
 }
 
-const AbstractShader* ShaderCache::GetTextureDecodingShader(TextureFormat format,
-                                                            TLUTFormat palette_format)
+const AbstractShader* ShaderCache::GetTextureDecodingShader(
+  TextureFormat format, const TextureConversionShaderTiled::DecodingShaderInfo* info,
+  TLUTFormat palette_format)
 {
+  if (info->palette_size == 0)
+    palette_format = TLUTFormat::IA8; // Reduce unnecessary copies
   const auto key = std::make_pair(static_cast<u32>(format), static_cast<u32>(palette_format));
   auto iter = m_texture_decoding_shaders.find(key);
   if (iter != m_texture_decoding_shaders.end())
     return iter->second.get();
 
   std::string shader_source =
-      TextureConversionShaderTiled::GenerateDecodingShader(format, palette_format, APIType::OpenGL);
+      TextureConversionShaderTiled::GenerateDecodingShader(info, palette_format, APIType::OpenGL);
   if (shader_source.empty())
   {
     m_texture_decoding_shaders.emplace(key, nullptr);
     return nullptr;
   }
 
+  std::string name = info->palette_size == 0
+                   ? fmt::format("Texture decoding compute shader: {}", format)
+                   : fmt::format("Texture decoding compute shader: {}, {}", format, palette_format);
+
   std::unique_ptr<AbstractShader> shader = g_renderer->CreateShaderFromSource(
-      ShaderStage::Compute, shader_source,
-      fmt::format("Texture decoding compute shader: {}, {}", format, palette_format));
+      ShaderStage::Compute, shader_source, name);
   if (!shader)
   {
     m_texture_decoding_shaders.emplace(key, nullptr);

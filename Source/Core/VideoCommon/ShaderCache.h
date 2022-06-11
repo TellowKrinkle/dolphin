@@ -110,7 +110,9 @@ public:
                                                         TextureFormat to_format);
 
   // Texture decoding compute shaders
-  const AbstractShader* GetTextureDecodingShader(TextureFormat format, TLUTFormat palette_format);
+  const AbstractShader* GetTextureDecodingShader(
+    TextureFormat format, const TextureConversionShaderTiled::DecodingShaderInfo* info,
+    TLUTFormat palette_format);
 
 private:
   static constexpr size_t NUM_PALETTE_CONVERSION_SHADERS = 3;
