@@ -25,6 +25,25 @@ void DepthState::Generate(const BPMemory& bp)
   func = bp.zmode.func.Value();
 }
 
+static bool IsDualSrc(SrcBlendFactor factor)
+{
+  return factor == SrcBlendFactor::SrcAlpha || factor == SrcBlendFactor::InvSrcAlpha;
+}
+
+static bool IsDualSrc(DstBlendFactor factor)
+{
+  return factor == DstBlendFactor::SrcClr   || factor == DstBlendFactor::InvSrcClr ||
+         factor == DstBlendFactor::SrcAlpha || factor == DstBlendFactor::InvSrcAlpha;
+}
+
+bool BlendingState::RequiresDualSrc() const
+{
+  if (!usedualsrc || !blendenable)
+    return false;
+  return IsDualSrc(srcfactor) || IsDualSrc(srcfactoralpha) ||
+         IsDualSrc(dstfactor) || IsDualSrc(dstfactoralpha);
+}
+
 // If the framebuffer format has no alpha channel, it is assumed to
 // ONE on blending. As the backends may emulate this framebuffer
 // configuration with an alpha channel, we just drop all references
