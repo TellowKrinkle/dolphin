@@ -54,7 +54,8 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   const bool ssaa = host_config.ssaa;
   const bool stereo = host_config.stereo;
   const bool use_dual_source = host_config.backend_dual_source_blend && !uid_data->no_dual_src;
-  const bool use_shader_blend = !use_dual_source && host_config.backend_shader_framebuffer_fetch;
+  const bool use_shader_blend = !host_config.backend_dual_source_blend
+                             && host_config.backend_shader_framebuffer_fetch;
   const bool use_shader_logic_op =
       !host_config.backend_logic_op && host_config.backend_shader_framebuffer_fetch;
   const bool use_framebuffer_fetch =
