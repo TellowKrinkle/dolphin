@@ -379,7 +379,7 @@ public:
   std::condition_variable m_cv;
   std::map<PipelineID, StoredPipeline> m_pipelines;
   std::map<const Shader*, std::vector<PipelineID>> m_shaders;
-  u32 m_pipeline_counter[2];
+  u32 m_pipeline_cntr[3];
 
   StoredPipeline CreatePipeline(const AbstractPipelineConfig& config)
   {
@@ -387,12 +387,19 @@ public:
     {
       assert(!config.geometry_shader);
       auto desc = MRCTransfer([MTLRenderPipelineDescriptor new]);
-      if (config.usage == AbstractPipelineUsage::GX)
-        [desc setLabel:[NSString stringWithFormat:@"GX Pipeline %d", m_pipeline_counter[0]++]];
-      else
-        [desc setLabel:[NSString stringWithFormat:@"Utility Pipeline %d", m_pipeline_counter[1]++]];
       [desc setVertexFunction:static_cast<const Shader*>(config.vertex_shader)->GetShader()];
       [desc setFragmentFunction:static_cast<const Shader*>(config.pixel_shader)->GetShader()];
+      if (config.usage == AbstractPipelineUsage::GX)
+      {
+        if ([[[desc vertexFunction] label] containsString:@"Uber"])
+          [desc setLabel:[NSString stringWithFormat:@"GX Uber Pipeline %d", m_pipeline_cntr[0]++]];
+        else
+          [desc setLabel:[NSString stringWithFormat:@"GX Pipeline %d", m_pipeline_cntr[1]++]];
+      }
+      else
+      {
+        [desc setLabel:[NSString stringWithFormat:@"Utility Pipeline %d", m_pipeline_cntr[2]++]];
+      }
       if (config.vertex_format)
         [desc setVertexDescriptor:static_cast<const VertexFormat*>(config.vertex_format)->Get()];
       RasterizationState rs = config.rasterization_state;
