@@ -150,6 +150,10 @@ constexpr BugInfo m_known_bugs[] = {
      BUG_BROKEN_DISCARD_WITH_EARLY_Z, -1.0, -1.0, true},
     {API_METAL,  OS_OSX, VENDOR_APPLE, DRIVER_APPLE,       Family::UNKNOWN,
      BUG_BROKEN_DISCARD_WITH_EARLY_Z, -1.0, -1.0, true},
+    {API_VULKAN, OS_OSX, VENDOR_INTEL, DRIVER_PORTABILITY, Family::UNKNOWN,
+     BUG_BROKEN_DYNAMIC_SAMPLER_INDEXING, -1.0, -1.0, true},
+    {API_METAL,  OS_OSX, VENDOR_INTEL, DRIVER_APPLE,       Family::UNKNOWN,
+     BUG_BROKEN_DYNAMIC_SAMPLER_INDEXING, -1.0, -1.0, true},
 };
 
 static std::map<Bug, BugInfo> m_bugs;

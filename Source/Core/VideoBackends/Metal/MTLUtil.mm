@@ -232,6 +232,8 @@ void Metal::Util::PopulateBackendInfoFeatures(VideoConfig* config, id<MTLDevice>
   if (version >= 2.3 && vendor == DriverDetails::VENDOR_INTEL)
     config->backend_info.bSupportsFramebufferFetch |= DetectIntelGPUFBFetch(device);
 #endif
+  if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DYNAMIC_SAMPLER_INDEXING))
+    config->backend_info.bSupportsDynamicSamplerIndexing = false;
 }
 
 // clang-format off
