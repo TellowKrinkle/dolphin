@@ -927,7 +927,7 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
     out.Write("\tfloat4 ocol0;\n");
   }
 
-  if (use_shader_blend)
+  if (uid_data->blend_enable)
   {
     out.Write("\tfloat4 ocol1;\n");
   }
