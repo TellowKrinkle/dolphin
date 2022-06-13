@@ -730,9 +730,17 @@ static GXUberPipelineUid ApplyDriverBugs(const GXUberPipelineUid& in)
 {
   GXUberPipelineUid out;
   memcpy(&out, &in, sizeof(out)); // Copy padding
-  if (!g_ActiveConfig.backend_info.bSupportsDualSourceBlend ||
-      (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DUAL_SOURCE_BLENDING) &&
-       !out.blending_state.RequiresDualSrc()))
+  if (g_ActiveConfig.backend_info.bSupportsFramebufferFetch)
+  {
+    // Always blend in shader
+    out.blending_state.blendenable = false;
+    out.blending_state.usedualsrc = false;
+    out.blending_state.logicopenable = false;
+    out.ps_uid.GetUidData()->no_dual_src = true;
+  }
+  else if (!g_ActiveConfig.backend_info.bSupportsDualSourceBlend ||
+           (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DUAL_SOURCE_BLENDING) &&
+            !out.blending_state.RequiresDualSrc()))
   {
     out.blending_state.usedualsrc = false;
     out.ps_uid.GetUidData()->no_dual_src = true;

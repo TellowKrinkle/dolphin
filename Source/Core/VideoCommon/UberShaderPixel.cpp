@@ -53,22 +53,17 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   const bool msaa = host_config.msaa;
   const bool ssaa = host_config.ssaa;
   const bool stereo = host_config.stereo;
+  const bool use_framebuffer_fetch = host_config.backend_shader_framebuffer_fetch;
   const bool use_dual_source = host_config.backend_dual_source_blend && !uid_data->no_dual_src;
-  const bool use_shader_blend = !host_config.backend_dual_source_blend &&
-                                host_config.backend_shader_framebuffer_fetch;
-  const bool use_shader_logic_op =
-      !host_config.backend_logic_op && host_config.backend_shader_framebuffer_fetch;
-  const bool use_framebuffer_fetch =
-      use_shader_blend || use_shader_logic_op ||
-      DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DISCARD_WITH_EARLY_Z);
   const bool early_depth = uid_data->early_depth != 0;
   const bool per_pixel_depth = uid_data->per_pixel_depth != 0;
   const bool bounding_box = host_config.bounding_box;
   const u32 numTexgen = uid_data->num_texgens;
   ShaderCode out;
 
-  out.Write("// Pixel UberShader for {} texgens{}{}\n", numTexgen,
-            early_depth ? ", early-depth" : "", per_pixel_depth ? ", per-pixel depth" : "");
+  out.Write("// Pixel UberShader for {} texgens{}{}{}\n", numTexgen,
+            early_depth ? ", early-depth" : "", per_pixel_depth ? ", per-pixel depth" : "",
+            !use_framebuffer_fetch && !use_dual_source ? ", no dual-source blending" : "");
   WriteBitfieldExtractHeader(out, api_type, host_config);
   WritePixelShaderCommonHeader(out, api_type, host_config, bounding_box);
   if (per_pixel_lighting)
@@ -530,12 +525,8 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
     // intermediate value with multiple reads & modifications, so we pull out the "real" output
     // value above and use a temporary for calculations, then set the output value once at the
     // end of the shader.
-    out.Write("  float4 ocol0;\n");
-  }
-
-  if (use_shader_blend)
-  {
-    out.Write("  float4 ocol1;\n");
+    out.Write("  float4 ocol0;\n"
+              "  float4 ocol1;\n");
   }
 
   if (host_config.backend_geometry_shaders && stereo)
@@ -954,8 +945,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   {
     // Instead of using discard, fetch the framebuffer's color value and use it as the output
     // for this fragment.
-    out.Write("  #define discard_fragment {{ {} = float4(initial_ocol0.xyz, 1.0); return; }}\n",
-              use_shader_blend ? "real_ocol0" : "ocol0");
+    out.Write("  #define discard_fragment {{ real_ocol0 = float4(initial_ocol0.xyz, 1.0); return; }}\n");
   }
   else
   {
@@ -1066,7 +1056,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
             "  }}\n"
             "\n");
 
-  if (use_shader_logic_op)
+  if (use_framebuffer_fetch)
   {
     static constexpr std::array<const char*, 16> logic_op_mode{
         "int4(0, 0, 0, 0)",          // CLEAR
@@ -1123,7 +1113,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
               "    ocol0.a = float(TevResult.a >> 2) / 63.0;\n"
               "  \n");
 
-    if (use_dual_source || use_shader_blend)
+    if (use_dual_source || use_framebuffer_fetch)
     {
       out.Write("  // Dest alpha override (dual source blending)\n"
                 "  // Colors will be blended against the alpha from ocol1 and\n"
@@ -1139,7 +1129,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
               "  }}\n");
   }
 
-  if (use_shader_blend)
+  if (use_framebuffer_fetch)
   {
     using Common::EnumMap;
 
@@ -1266,9 +1256,12 @@ void EnumeratePixelShaderUids(const std::function<void(const PixelShaderUid&)>& 
 {
   PixelShaderUid uid;
 
+  pixel_ubershader_uid_data* const puid = uid.GetUidData();
+  if (g_ActiveConfig.backend_info.bSupportsFramebufferFetch)
+    puid->no_dual_src = 1; // Always using fbfetch
+
   for (u32 texgens = 0; texgens <= 8; texgens++)
   {
-    pixel_ubershader_uid_data* const puid = uid.GetUidData();
     puid->num_texgens = texgens;
 
     for (u32 early_depth = 0; early_depth < 2; early_depth++)
@@ -1285,7 +1278,8 @@ void EnumeratePixelShaderUids(const std::function<void(const PixelShaderUid&)>& 
         {
           puid->uint_output = uint_output;
           callback(uid);
-          if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DUAL_SOURCE_BLENDING))
+          if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DUAL_SOURCE_BLENDING) &&
+              !g_ActiveConfig.backend_info.bSupportsFramebufferFetch)
           {
             puid->no_dual_src = 1;
             callback(uid);
