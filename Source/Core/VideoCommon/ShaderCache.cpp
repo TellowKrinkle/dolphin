@@ -431,7 +431,8 @@ ShaderCache::CompileVertexUberShader(const UberShader::VertexShaderUid& uid) con
 {
   const ShaderCode source_code =
       UberShader::GenVertexShader(m_api_type, m_host_config, uid.GetUidData());
-  return g_renderer->CreateShaderFromSource(ShaderStage::Vertex, source_code.GetBuffer());
+  std::string name = fmt::format("Vertex UberShader for {} texgens", uid.GetUidData()->num_texgens);
+  return g_renderer->CreateShaderFromSource(ShaderStage::Vertex, source_code.GetBuffer(), name);
 }
 
 std::unique_ptr<AbstractShader> ShaderCache::CompilePixelShader(const PixelShaderUid& uid) const
@@ -446,7 +447,12 @@ ShaderCache::CompilePixelUberShader(const UberShader::PixelShaderUid& uid) const
 {
   const ShaderCode source_code =
       UberShader::GenPixelShader(m_api_type, m_host_config, uid.GetUidData());
-  return g_renderer->CreateShaderFromSource(ShaderStage::Pixel, source_code.GetBuffer());
+  const UberShader::pixel_ubershader_uid_data* data = uid.GetUidData();
+  std::string name = fmt::format("Pixel UberShader for {} texgens{}{}{}", data->num_texgens,
+                                 data->early_depth ? ", early depth" : "",
+                                 data->per_pixel_depth ? ", per-pixel depth" : "",
+                                 data->no_dual_src ? ", no dual-source blending" : "");
+  return g_renderer->CreateShaderFromSource(ShaderStage::Pixel, source_code.GetBuffer(), name);
 }
 
 const AbstractShader* ShaderCache::InsertVertexShader(const VertexShaderUid& uid,
