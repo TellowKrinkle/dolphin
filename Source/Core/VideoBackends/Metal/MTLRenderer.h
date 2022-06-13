@@ -82,7 +82,6 @@ private:
   u32 m_texture_counter = 0;
   u32 m_staging_texture_counter = 0;
   u32 m_shader_counter[4] = {};
-  u32 m_pipeline_counter = 0;
 
   void CheckForSurfaceChange();
   void CheckForSurfaceResize();
