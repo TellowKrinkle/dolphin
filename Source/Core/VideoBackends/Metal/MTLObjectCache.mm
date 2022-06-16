@@ -443,6 +443,9 @@ public:
     }
   }
 
+  u32 unique_pipelines = 0;
+  u32 total_pipelines = 0;
+
   StoredPipeline GetOrCreatePipeline(const AbstractPipelineConfig& config)
   {
     std::unique_lock<std::mutex> lock(m_mtx);
@@ -450,6 +453,8 @@ public:
     auto it = m_pipelines.find(pid);
     if (it != m_pipelines.end())
     {
+      total_pipelines++;
+      fprintf(stderr, "%d unique pipelines, %d total pipelines\n", unique_pipelines, total_pipelines);
       while (!it->second.first && !it->second.second.textures)
         m_cv.wait(lock);  // Wait for whoever's already compiling this
       return it->second;
@@ -459,6 +464,9 @@ public:
     lock.unlock();
     StoredPipeline pipe = CreatePipeline(config);
     lock.lock();
+    unique_pipelines++;
+    total_pipelines++;
+    fprintf(stderr, "%d unique pipelines, %d total pipelines\n", unique_pipelines, total_pipelines);
     if (pipe.first)
       it->second = pipe;
     else

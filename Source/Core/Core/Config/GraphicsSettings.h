@@ -36,6 +36,7 @@ extern const Info<int> GFX_PERF_SAMP_WINDOW;
 extern const Info<bool> GFX_SHOW_NETPLAY_PING;
 extern const Info<bool> GFX_SHOW_NETPLAY_MESSAGES;
 extern const Info<bool> GFX_LOG_RENDER_TIME_TO_FILE;
+extern const Info<bool> GFX_LOG_COMPILE_TIME_TO_FILE;
 extern const Info<bool> GFX_OVERLAY_STATS;
 extern const Info<bool> GFX_OVERLAY_PROJ_STATS;
 extern const Info<bool> GFX_OVERLAY_SCISSOR_STATS;

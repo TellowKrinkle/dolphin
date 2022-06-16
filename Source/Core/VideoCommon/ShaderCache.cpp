@@ -8,6 +8,7 @@
 #include "Common/Assert.h"
 #include "Common/FileUtil.h"
 #include "Common/MsgHandler.h"
+#include "Common/Timer.h"
 #include "Core/ConfigManager.h"
 
 #include "VideoCommon/ConstantManager.h"
@@ -27,6 +28,18 @@ std::unique_ptr<VideoCommon::ShaderCache> g_shader_cache;
 
 namespace VideoCommon
 {
+static void LogCompileTime(u64 us, std::string_view name)
+{
+  std::string text = fmt::format("Compiled {} in {:.3f}ms", name, (us / 1000.0));
+  INFO_LOG_FMT(VIDEO, "{}", text);
+  if (!g_ActiveConfig.bLogCompileTimeToFile)
+    return;
+  std::ofstream log;
+  File::OpenFStream(log, File::GetUserPath(D_LOGS_IDX) + "compile_time.txt",
+                    std::ios_base::out | std::ios_base::app);
+  log << text << std::endl;
+}
+
 ShaderCache::ShaderCache() : m_api_type{APIType::Nothing}
 {
 }
@@ -121,7 +134,11 @@ const AbstractPipeline* ShaderCache::GetPipelineForUid(const GXPipelineUid& uid)
   std::unique_ptr<AbstractPipeline> pipeline;
   std::optional<AbstractPipelineConfig> pipeline_config = GetGXPipelineConfig(uid);
   if (pipeline_config)
+  {
+    u64 begin = Common::Timer::NowUs();
     pipeline = g_renderer->CreatePipeline(*pipeline_config);
+    LogCompileTime(Common::Timer::NowUs() - begin, "GX Pipeline");
+  }
   if (g_ActiveConfig.bShaderCache && !exists_in_cache)
     AppendGXPipelineUID(uid);
   return InsertGXPipeline(uid, std::move(pipeline));
@@ -144,6 +161,13 @@ std::optional<const AbstractPipeline*> ShaderCache::GetPipelineForUidAsync(const
   return {};
 }
 
+static std::string UberPipelineName(const GXUberPipelineUid& uid)
+{
+  std::string desc = fmt::to_string(*uid.ps_uid.GetUidData());
+  desc.replace(0, strlen("Pixel UberShader"), "UberShader Pipeline");
+  return desc;
+}
+
 const AbstractPipeline* ShaderCache::GetUberPipelineForUid(const GXUberPipelineUid& uid)
 {
   auto it = m_gx_uber_pipeline_cache.find(uid);
@@ -153,7 +177,11 @@ const AbstractPipeline* ShaderCache::GetUberPipelineForUid(const GXUberPipelineU
   std::unique_ptr<AbstractPipeline> pipeline;
   std::optional<AbstractPipelineConfig> pipeline_config = GetGXPipelineConfig(uid);
   if (pipeline_config)
+  {
+    u64 begin = Common::Timer::NowUs();
     pipeline = g_renderer->CreatePipeline(*pipeline_config);
+    LogCompileTime(Common::Timer::NowUs() - begin, UberPipelineName(uid));
+  }
   return InsertGXUberPipeline(uid, std::move(pipeline));
 }
 
@@ -434,7 +462,10 @@ std::unique_ptr<AbstractShader> ShaderCache::CompileVertexShader(const VertexSha
 {
   const ShaderCode source_code =
       GenerateVertexShaderCode(m_api_type, m_host_config, uid.GetUidData());
-  return g_renderer->CreateShaderFromSource(ShaderStage::Vertex, source_code.GetBuffer());
+  u64 begin = Common::Timer::NowUs();
+  auto out = g_renderer->CreateShaderFromSource(ShaderStage::Vertex, source_code.GetBuffer());
+  LogCompileTime(Common::Timer::NowUs() - begin, "GX Vertex Shader");
+  return out;
 }
 
 std::unique_ptr<AbstractShader>
@@ -442,15 +473,21 @@ ShaderCache::CompileVertexUberShader(const UberShader::VertexShaderUid& uid) con
 {
   const ShaderCode source_code =
       UberShader::GenVertexShader(m_api_type, m_host_config, uid.GetUidData());
-  return g_renderer->CreateShaderFromSource(ShaderStage::Vertex, source_code.GetBuffer(),
-                                            fmt::to_string(*uid.GetUidData()));
+  std::string name = fmt::to_string(*uid.GetUidData());
+  u64 begin = Common::Timer::NowUs();
+  auto out = g_renderer->CreateShaderFromSource(ShaderStage::Vertex, source_code.GetBuffer(), name);
+  LogCompileTime(Common::Timer::NowUs() - begin, name);
+  return out;
 }
 
 std::unique_ptr<AbstractShader> ShaderCache::CompilePixelShader(const PixelShaderUid& uid) const
 {
   const ShaderCode source_code =
       GeneratePixelShaderCode(m_api_type, m_host_config, uid.GetUidData());
-  return g_renderer->CreateShaderFromSource(ShaderStage::Pixel, source_code.GetBuffer());
+  u64 begin = Common::Timer::NowUs();
+  auto out = g_renderer->CreateShaderFromSource(ShaderStage::Pixel, source_code.GetBuffer());
+  LogCompileTime(Common::Timer::NowUs() - begin, "GX Pixel Shader");
+  return out;
 }
 
 std::unique_ptr<AbstractShader>
@@ -458,8 +495,11 @@ ShaderCache::CompilePixelUberShader(const UberShader::PixelShaderUid& uid) const
 {
   const ShaderCode source_code =
       UberShader::GenPixelShader(m_api_type, m_host_config, uid.GetUidData());
-  return g_renderer->CreateShaderFromSource(ShaderStage::Pixel, source_code.GetBuffer(),
-                                            fmt::to_string(*uid.GetUidData()));
+  std::string name = fmt::to_string(*uid.GetUidData());
+  u64 begin = Common::Timer::NowUs();
+  auto out = g_renderer->CreateShaderFromSource(ShaderStage::Pixel, source_code.GetBuffer(), name);
+  LogCompileTime(Common::Timer::NowUs() - begin, name);
+  return out;
 }
 
 const AbstractShader* ShaderCache::InsertVertexShader(const VertexShaderUid& uid,
@@ -554,9 +594,11 @@ const AbstractShader* ShaderCache::CreateGeometryShader(const GeometryShaderUid&
 {
   const ShaderCode source_code =
       GenerateGeometryShaderCode(m_api_type, m_host_config, uid.GetUidData());
+  u64 begin = Common::Timer::NowUs();
   std::unique_ptr<AbstractShader> shader =
       g_renderer->CreateShaderFromSource(ShaderStage::Geometry, source_code.GetBuffer(),
                                          fmt::format("Geometry shader: {}", *uid.GetUidData()));
+  LogCompileTime(Common::Timer::NowUs() - begin, "GX Geometry Shader");
 
   auto& entry = m_gs_cache.shader_map[uid];
   entry.pending = false;
@@ -1158,7 +1200,11 @@ void ShaderCache::QueuePipelineCompile(const GXPipelineUid& uid, u32 priority)
     bool Compile() override
     {
       if (config)
+      {
+        u64 begin = Common::Timer::NowUs();
         pipeline = g_renderer->CreatePipeline(*config);
+        LogCompileTime(Common::Timer::NowUs() - begin, "GX Pipeline");
+      }
       return true;
     }
 
@@ -1233,7 +1279,12 @@ void ShaderCache::QueueUberPipelineCompile(const GXUberPipelineUid& uid, u32 pri
     bool Compile() override
     {
       if (config)
+      {
+        u64 begin = Common::Timer::NowUs();
         UberPipeline = g_renderer->CreatePipeline(*config);
+        const UberShader::pixel_ubershader_uid_data* data = uid.ps_uid.GetUidData();
+        LogCompileTime(Common::Timer::NowUs() - begin, UberPipelineName(uid));
+      }
       return true;
     }
 
@@ -1371,9 +1422,11 @@ ShaderCache::GetEFBCopyToVRAMPipeline(const TextureConversionShaderGen::TCShader
     return iter->second.get();
 
   auto shader_code = TextureConversionShaderGen::GeneratePixelShader(m_api_type, uid.GetUidData());
-  auto shader = g_renderer->CreateShaderFromSource(
-      ShaderStage::Pixel, shader_code.GetBuffer(),
-      fmt::format("EFB copy to VRAM pixel shader: {}", *uid.GetUidData()));
+  const std::string name = fmt::format("EFB copy to VRAM pixel shader: {}", *uid.GetUidData());
+  u64 begin = Common::Timer::NowUs();
+  auto shader =
+      g_renderer->CreateShaderFromSource(ShaderStage::Pixel, shader_code.GetBuffer(), name);
+  LogCompileTime(Common::Timer::NowUs() - begin, name);
   if (!shader)
   {
     m_efb_copy_to_vram_pipelines.emplace(uid, nullptr);
@@ -1391,7 +1444,10 @@ ShaderCache::GetEFBCopyToVRAMPipeline(const TextureConversionShaderGen::TCShader
   config.blending_state = RenderState::GetNoBlendingBlendState();
   config.framebuffer_state = RenderState::GetRGBA8FramebufferState();
   config.usage = AbstractPipelineUsage::Utility;
+  begin = Common::Timer::NowUs();
   auto iiter = m_efb_copy_to_vram_pipelines.emplace(uid, g_renderer->CreatePipeline(config));
+  LogCompileTime(Common::Timer::NowUs() - begin,
+                 fmt::format("EFB copy to VRAM pipeline: {}", *uid.GetUidData()));
   return iiter.first->second.get();
 }
 
@@ -1403,8 +1459,10 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
 
   const std::string shader_code =
       TextureConversionShaderTiled::GenerateEncodingShader(uid, m_api_type);
-  const auto shader = g_renderer->CreateShaderFromSource(
-      ShaderStage::Pixel, shader_code, fmt::format("EFB copy to RAM pixel shader: {}", uid));
+  const std::string name = fmt::format("EFB copy to RAM pixel shader: {}", uid);
+  u64 begin = Common::Timer::NowUs();
+  const auto shader = g_renderer->CreateShaderFromSource(ShaderStage::Pixel, shader_code, name);
+  LogCompileTime(Common::Timer::NowUs() - begin, name);
   if (!shader)
   {
     m_efb_copy_to_ram_pipelines.emplace(uid, nullptr);
@@ -1419,7 +1477,10 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
   config.blending_state = RenderState::GetNoBlendingBlendState();
   config.framebuffer_state = RenderState::GetColorFramebufferState(AbstractTextureFormat::BGRA8);
   config.usage = AbstractPipelineUsage::Utility;
+  begin = Common::Timer::NowUs();
   auto iiter = m_efb_copy_to_ram_pipelines.emplace(uid, g_renderer->CreatePipeline(config));
+  LogCompileTime(Common::Timer::NowUs() - begin,
+                 fmt::format("EFB copy to RAM pipeline: {}", uid));
   return iiter.first->second.get();
 }
 
@@ -1526,9 +1587,12 @@ const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat
     return nullptr;
   }
 
-  std::unique_ptr<AbstractShader> shader = g_renderer->CreateShaderFromSource(
-      ShaderStage::Pixel, shader_source,
-      fmt::format("Texture reinterpret pixel shader: {} to {}", from_format, to_format));
+  std::string name =
+      fmt::format("Texture reinterpret pixel shader: {} to {}", from_format, to_format);
+  u64 begin = Common::Timer::NowUs();
+  std::unique_ptr<AbstractShader> shader =
+      g_renderer->CreateShaderFromSource(ShaderStage::Pixel, shader_source, name);
+  LogCompileTime(Common::Timer::NowUs() - begin, name);
   if (!shader)
   {
     m_texture_reinterpret_pipelines.emplace(key, nullptr);
@@ -1545,7 +1609,10 @@ const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat
   config.blending_state = RenderState::GetNoBlendingBlendState();
   config.framebuffer_state = RenderState::GetRGBA8FramebufferState();
   config.usage = AbstractPipelineUsage::Utility;
+  begin = Common::Timer::NowUs();
   auto iiter = m_texture_reinterpret_pipelines.emplace(key, g_renderer->CreatePipeline(config));
+  LogCompileTime(Common::Timer::NowUs() - begin,
+                 fmt::format("Texture reinterpret pipeline: {} to {}", from_format, to_format));
   return iiter.first->second.get();
 }
 
@@ -1572,8 +1639,10 @@ ShaderCache::GetTextureDecodingShader(TextureFormat format,
           fmt::format("Texture decoding compute shader: {}, {}", format, *palette_format) :
           fmt::format("Texture decoding compute shader: {}", format);
 
+  u64 begin = Common::Timer::NowUs();
   std::unique_ptr<AbstractShader> shader =
       g_renderer->CreateShaderFromSource(ShaderStage::Compute, shader_source, name);
+  LogCompileTime(Common::Timer::NowUs() - begin, name);
   if (!shader)
   {
     m_texture_decoding_shaders.emplace(key, nullptr);
