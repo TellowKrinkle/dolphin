@@ -235,6 +235,7 @@ struct VideoConfig final
     bool bSupportsTextureQueryLevels = false;
     bool bSupportsLodBiasInSampler = false;
     bool bSupportsSettingObjectNames = false;
+    bool bSupportsDynamicVertexLoader = false;
   } backend_info;
 
   // Utility

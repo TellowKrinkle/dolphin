@@ -68,6 +68,7 @@ void Metal::Util::PopulateBackendInfo(VideoConfig* config)
   config->backend_info.bSupportsTextureQueryLevels = true;
   config->backend_info.bSupportsLodBiasInSampler = false;
   config->backend_info.bSupportsSettingObjectNames = true;
+  config->backend_info.bSupportsDynamicVertexLoader = true;
 }
 
 void Metal::Util::PopulateBackendInfoAdapters(VideoConfig* config,
@@ -419,6 +420,7 @@ std::string Metal::Util::TranslateShaderToMSL(ShaderStage stage, std::string_vie
   static const spirv_cross::MSLResourceBinding resource_bindings[] = {
       MakeResourceBinding(spv::ExecutionModelVertex,    0, 0, 1, 0, 0), // vs/ubo
       MakeResourceBinding(spv::ExecutionModelVertex,    0, 1, 1, 0, 0), // vs/ubo
+      MakeResourceBinding(spv::ExecutionModelVertex,    2, 1, 0, 0, 0), // vs/ssbo
       MakeResourceBinding(spv::ExecutionModelFragment,  0, 0, 0, 0, 0), // vs/ubo
       MakeResourceBinding(spv::ExecutionModelFragment,  0, 1, 1, 0, 0), // vs/ubo
       MakeResourceBinding(spv::ExecutionModelFragment,  1, 0, 0, 0, 0), // ps/samp0

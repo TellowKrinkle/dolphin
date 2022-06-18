@@ -415,6 +415,9 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
   // Copy the GPU name to g_Config, so Analytics can see it.
   g_Config.backend_info.AdapterName = g_ogl_config.gl_renderer;
 
+  // Unneccessary since OGL doesn't use pipelines
+  g_Config.backend_info.bSupportsDynamicVertexLoader = false;
+
   g_Config.backend_info.bSupportsDualSourceBlend =
       (GLExtensions::Supports("GL_ARB_blend_func_extended") ||
        GLExtensions::Supports("GL_EXT_blend_func_extended"));
