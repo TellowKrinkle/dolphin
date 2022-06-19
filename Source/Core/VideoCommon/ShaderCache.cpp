@@ -158,6 +158,89 @@ std::optional<const AbstractPipeline*> ShaderCache::GetPipelineForUidAsync(const
   return {};
 }
 
+static std::string_view describe(SrcBlendFactor factor, bool dualsrc)
+{
+  switch (factor)
+  {
+  case SrcBlendFactor::Zero: return "0";
+  case SrcBlendFactor::One: return "1";
+  case SrcBlendFactor::DstClr: return "Cd";
+  case SrcBlendFactor::InvDstClr: return "(1 - Cd)";
+  case SrcBlendFactor::SrcAlpha: return dualsrc ? "As1" : "As";
+  case SrcBlendFactor::InvSrcAlpha: return dualsrc ? "(1 - As1)" : "(1 - As)";
+  case SrcBlendFactor::DstAlpha: return "Ad";
+  case SrcBlendFactor::InvDstAlpha: return "(1 - Ad)";
+  default: return "???";
+  }
+}
+
+static std::string_view describe(DstBlendFactor factor, bool dualsrc)
+{
+  switch (factor)
+  {
+  case DstBlendFactor::Zero: return "0";
+  case DstBlendFactor::One: return "1";
+  case DstBlendFactor::SrcClr: return dualsrc ? "Cs1" : "Cs";
+  case DstBlendFactor::InvSrcClr: return dualsrc ? "(1 - Cs1)" : "(1 - Cs)";
+  case DstBlendFactor::SrcAlpha: return dualsrc ? "As1" : "As";
+  case DstBlendFactor::InvSrcAlpha: return dualsrc ? "(1 - As1)" : "(1 - As)";
+  case DstBlendFactor::DstAlpha: return "Ad";
+  case DstBlendFactor::InvDstAlpha: return "(1 - Ad)";
+  default: return "???";
+  }
+}
+
+static std::string describe(const GXUberPipelineUid& uid)
+{
+  const UberShader::pixel_ubershader_uid_data* data = uid.ps_uid.GetUidData();
+  std::string name = fmt::format("UberShader pipeline for {} texgens{}{}{}", data->num_texgens,
+                                 data->early_depth ? ", early depth" : "",
+                                 data->per_pixel_depth ? ", per-pixel depth" : "",
+                                 data->no_dual_src ? ", no dual-source blending" : "");
+  if (uid.blending_state.alphaupdate && !uid.blending_state.colorupdate)
+    name += ", alpha only";
+  else if (!uid.blending_state.alphaupdate && uid.blending_state.colorupdate)
+    name += ", color only";
+  if (uid.blending_state.blendenable)
+  {
+    bool src1 = uid.blending_state.usedualsrc;
+    name += fmt::format(
+        ", color blend Cd * {} {} Cs * {}", describe(uid.blending_state.dstfactor, src1),
+        uid.blending_state.subtract ? "-" : "+", describe(uid.blending_state.srcfactor, src1));
+    name += fmt::format(", alpha blend Ad * {} {} As * {}",
+                        describe(uid.blending_state.dstfactoralpha, src1),
+                        uid.blending_state.subtractAlpha ? "-" : "+",
+                        describe(uid.blending_state.srcfactoralpha, src1));
+  }
+  if (uid.blending_state.logicopenable)
+    name += ", logicop enable";
+  if (uid.depth_state.testenable)
+  {
+    switch (uid.depth_state.func)
+    {
+      case CompareMode::Never:   name += ", ZTST Never";   break;
+      case CompareMode::Less:    name += ", ZTST Less";    break;
+      case CompareMode::Equal:   name += ", ZTST Equal";   break;
+      case CompareMode::LEqual:  name += ", ZTST LEqual";  break;
+      case CompareMode::Greater: name += ", ZTST Greater"; break;
+      case CompareMode::NEqual:  name += ", ZTST NEqual";  break;
+      case CompareMode::GEqual:  name += ", ZTST GEqual";  break;
+      case CompareMode::Always:  name += ", ZTST Always";  break;
+    }
+    if (uid.depth_state.updateenable)
+      name += " ZWE";
+  }
+  name += fmt::format(", cullmode {}", uid.rasterization_state.cullmode.Value());
+  switch (uid.rasterization_state.primitive.Value())
+  {
+  case PrimitiveType::Points:        name += ", Points";        break;
+  case PrimitiveType::Lines:         name += ", Lines";         break;
+  case PrimitiveType::Triangles:     name += ", Triangles";     break;
+  case PrimitiveType::TriangleStrip: name += ", TriangleStrip"; break;
+  }
+  return name;
+}
+
 const AbstractPipeline* ShaderCache::GetUberPipelineForUid(const GXUberPipelineUid& uid)
 {
   auto it = m_gx_uber_pipeline_cache.find(uid);
@@ -170,12 +253,7 @@ const AbstractPipeline* ShaderCache::GetUberPipelineForUid(const GXUberPipelineU
   {
     u64 begin = Common::Timer::GetTimeUs();
     pipeline = g_renderer->CreatePipeline(*pipeline_config);
-    const UberShader::pixel_ubershader_uid_data* data = uid.ps_uid.GetUidData();
-    LogCompileTime(Common::Timer::GetTimeUs() - begin,
-                   fmt::format("UberShader pipeline for {} texgens{}{}{}", data->num_texgens,
-                               data->early_depth ? ", early depth" : "",
-                               data->per_pixel_depth ? ", per-pixel depth" : "",
-                               data->no_dual_src ? ", no dual-source blending" : ""));
+    LogCompileTime(Common::Timer::GetTimeUs() - begin, describe(uid));
   }
   return InsertGXUberPipeline(uid, std::move(pipeline));
 }
@@ -680,7 +758,7 @@ static GXPipelineUid ApplyDriverBugs(const GXPipelineUid& in)
         && ps->ztest == EmulatedZ::ForcedEarly)
     {
       ps->ztest = EmulatedZ::EarlyWithFBFetch;
-      fbfetch_blend |= out.blending_state.blendenable;
+      fbfetch_blend |= static_cast<bool>(out.blending_state.blendenable);
       ps->no_dual_src = true;
     }
     fbfetch_blend |= blend.logicopenable && !g_ActiveConfig.backend_info.bSupportsLogicOp;
@@ -1232,12 +1310,7 @@ void ShaderCache::QueueUberPipelineCompile(const GXUberPipelineUid& uid, u32 pri
       {
         u64 begin = Common::Timer::GetTimeUs();
         UberPipeline = g_renderer->CreatePipeline(*config);
-        const UberShader::pixel_ubershader_uid_data* data = uid.ps_uid.GetUidData();
-        LogCompileTime(Common::Timer::GetTimeUs() - begin,
-                       fmt::format("UberShader pipeline for {} texgens{}{}{}", data->num_texgens,
-                                   data->early_depth ? ", early depth" : "",
-                                   data->per_pixel_depth ? ", per-pixel depth" : "",
-                                   data->no_dual_src ? ", no dual-source blending" : ""));
+        LogCompileTime(Common::Timer::GetTimeUs() - begin, describe(uid));
       }
       return true;
     }

@@ -274,7 +274,7 @@ void VulkanContext::PopulateBackendInfo(VideoConfig* config)
   config->backend_info.bSupportsPipelineCacheData = false;         // Handled via pipeline caches.
   config->backend_info.bSupportsDynamicSamplerIndexing = true;     // Assumed support.
   config->backend_info.bSupportsPostProcessing = true;             // Assumed support.
-  config->backend_info.bSupportsBackgroundCompiling = true;        // Assumed support.
+  config->backend_info.bSupportsBackgroundCompiling = false;        // Assumed support.
   config->backend_info.bSupportsCopyToVram = true;                 // Assumed support.
   config->backend_info.bSupportsReversedDepthRange = true;         // Assumed support.
   config->backend_info.bSupportsExclusiveFullscreen = false;       // Dependent on OS and features.
