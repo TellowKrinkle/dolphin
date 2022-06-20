@@ -60,11 +60,25 @@ ShaderCode GenVertexShader(APIType api_type, const ShaderHostConfig& host_config
 SSBO_BINDING(1) readonly restrict buffer Vertices {{
   uint vertex_buffer[];
 }};
+)");
+    if (api_type == APIType::D3D)
+    {
+      // D3D doesn't include the base vertex in SV_VertexID
+      out.Write("UBO_BINDING(std140, 3) uniform DX_Constants {{\n"
+                "  uint base_vertex;\n"
+                "}};\n\n"
+                "uint GetOffset(uint attr_offset) {{\n"
+                "  return (gl_VertexID + base_vertex) * vertex_stride + attr_offset;\n"
+                "}}\n");
+    }
+    else
+    {
+      out.Write("uint GetOffset(uint attr_offset) {{\n"
+                "  return gl_VertexID * vertex_stride + attr_offset;\n"
+                "}}\n");
+    }
 
-uint GetOffset(uint attr_offset) {{
-  return gl_VertexID * vertex_stride + attr_offset;
-}}
-
+    out.Write(R"(
 uint4 load_input_uint4_ubyte4(uint attr_offset) {{
   uint value = vertex_buffer[GetOffset(attr_offset)];
   return uint4(value & 0xff, (value >> 8) & 0xff, (value >> 16) & 0xff, value >> 24);
