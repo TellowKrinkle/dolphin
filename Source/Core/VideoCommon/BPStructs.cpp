@@ -732,6 +732,8 @@ void LoadBPReg(u8 reg, u32 value, int cycles_into_future)
 
 void LoadBPRegPreprocess(u8 reg, u32 value, int cycles_into_future)
 {
+  if (!Fifo::UseDeterministicGPUThread())
+    return;
   // masking via BPMEM_BP_MASK could hypothetically be a problem
   u32 newval = value & 0xffffff;
   switch (reg)

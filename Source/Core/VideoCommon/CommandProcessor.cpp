@@ -493,19 +493,7 @@ void SetCPStatusFromGPU()
   if (interrupt != s_interrupt_set.IsSet() && !s_interrupt_waiting.IsSet())
   {
     u64 userdata = interrupt ? 1 : 0;
-    if (IsOnThread())
-    {
-      if (!interrupt || bpInt || undfInt || ovfInt)
-      {
-        // Schedule the interrupt asynchronously
-        s_interrupt_waiting.Set();
-        CommandProcessor::UpdateInterruptsFromVideoBackend(userdata);
-      }
-    }
-    else
-    {
-      CommandProcessor::UpdateInterrupts(userdata);
-    }
+    CommandProcessor::UpdateInterrupts(userdata);
   }
 }
 
@@ -531,19 +519,7 @@ void SetCPStatusFromCPU()
   if (interrupt != s_interrupt_set.IsSet() && !s_interrupt_waiting.IsSet())
   {
     u64 userdata = interrupt ? 1 : 0;
-    if (IsOnThread())
-    {
-      if (!interrupt || bpInt || undfInt || ovfInt)
-      {
-        s_interrupt_set.Set(interrupt);
-        DEBUG_LOG_FMT(COMMANDPROCESSOR, "Interrupt set");
-        ProcessorInterface::SetInterrupt(INT_CAUSE_CP, interrupt);
-      }
-    }
-    else
-    {
-      CommandProcessor::UpdateInterrupts(userdata);
-    }
+    CommandProcessor::UpdateInterrupts(userdata);
   }
 }
 

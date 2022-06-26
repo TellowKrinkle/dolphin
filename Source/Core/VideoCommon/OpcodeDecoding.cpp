@@ -18,6 +18,7 @@
 #include "Common/Logging/Log.h"
 #include "Core/FifoPlayer/FifoRecorder.h"
 #include "Core/HW/Memmap.h"
+#include "Core/System.h"
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/CPMemory.h"
 #include "VideoCommon/CommandProcessor.h"
@@ -159,7 +160,7 @@ public:
       {
         const u8* start_address;
 
-        if (Fifo::UseDeterministicGPUThread())
+        if (Core::System::GetInstance().IsDualCoreMode())
           start_address = static_cast<u8*>(Fifo::PopFifoAuxBuffer(size));
         else
           start_address = Memory::GetPointer(address);
