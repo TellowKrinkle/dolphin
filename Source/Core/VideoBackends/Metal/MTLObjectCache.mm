@@ -22,12 +22,13 @@ MRCOwned<id<MTLDevice>> Metal::g_device;
 MRCOwned<id<MTLCommandQueue>> Metal::g_queue;
 std::unique_ptr<Metal::ObjectCache> Metal::g_object_cache;
 
-static void SetupDSS(MRCOwned<id<MTLDepthStencilState>> (&dss)[Metal::DSSSelector::N_VALUES]);
+static void SetupDepthStencil(
+    MRCOwned<id<MTLDepthStencilState>> (&dss)[Metal::DepthStencilSelector::N_VALUES]);
 
 Metal::ObjectCache::ObjectCache()
 {
   m_internal = std::make_unique<Internal>();
-  SetupDSS(m_dss);
+  SetupDepthStencil(m_dss);
 }
 
 Metal::ObjectCache::~ObjectCache()
@@ -85,10 +86,11 @@ static const char* to_string(MTLCompareFunction compare)
 
 // clang-format on
 
-static void SetupDSS(MRCOwned<id<MTLDepthStencilState>> (&dss)[Metal::DSSSelector::N_VALUES])
+static void SetupDepthStencil(
+    MRCOwned<id<MTLDepthStencilState>> (&dss)[Metal::DepthStencilSelector::N_VALUES])
 {
   auto desc = MRCTransfer([MTLDepthStencilDescriptor new]);
-  Metal::DSSSelector sel;
+  Metal::DepthStencilSelector sel;
   for (size_t i = 0; i < std::size(dss); ++i)
   {
     sel.value = i;

@@ -363,7 +363,7 @@ void Metal::StateTracker::BeginRenderPass(MTLRenderPassDescriptor* descriptor)
   m_current.viewport = {
       0.f, 0.f, static_cast<float>(m_current.width), static_cast<float>(m_current.height),
       0.f, 1.f};
-  m_current.dss = DSSSelector(false, CompareMode::Always);
+  m_current.depth_stencil = DepthStencilSelector(false, CompareMode::Always);
   m_current.depth_clip_mode = MTLDepthClipModeClip;
   m_current.cull_mode = MTLCullModeNone;
   m_current.perf_query_group = static_cast<PerfQueryGroup>(-1);
@@ -726,10 +726,10 @@ void Metal::StateTracker::PrepareRender()
       m_current.cull_mode = pipe->Cull();
       [enc setCullMode:pipe->Cull()];
     }
-    if (pipe->DSS() != m_current.dss)
+    if (pipe->DepthStencil() != m_current.depth_stencil)
     {
-      m_current.dss = pipe->DSS();
-      [enc setDepthStencilState:g_object_cache->GetDSS(m_current.dss)];
+      m_current.depth_stencil = pipe->DepthStencil();
+      [enc setDepthStencilState:g_object_cache->GetDepthStencil(m_current.depth_stencil)];
     }
     MTLDepthClipMode clip = is_gx && g_ActiveConfig.backend_info.bSupportsDepthClamp ?
                                 MTLDepthClipModeClamp :

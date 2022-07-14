@@ -34,7 +34,7 @@ public:
   id<MTLRenderPipelineState> Get() const { return m_pipeline; }
   MTLPrimitiveType Prim() const { return m_prim; }
   MTLCullMode Cull() const { return m_cull; }
-  DSSSelector DSS() const { return m_dss; }
+  DepthStencilSelector DepthStencil() const { return m_depth_stencil; }
   AbstractPipelineUsage Usage() const { return m_usage; }
   u32 GetTextures() const { return m_reflection.textures; }
   u32 GetSamplers() const { return m_reflection.samplers; }
@@ -47,7 +47,7 @@ private:
   MRCOwned<id<MTLRenderPipelineState>> m_pipeline;
   MTLPrimitiveType m_prim;
   MTLCullMode m_cull;
-  DSSSelector m_dss;
+  DepthStencilSelector m_depth_stencil;
   AbstractPipelineUsage m_usage;
   PipelineReflection m_reflection;
 };

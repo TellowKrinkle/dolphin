@@ -56,8 +56,8 @@ Metal::PipelineReflection::PipelineReflection(MTLRenderPipelineReflection* refle
 Metal::Pipeline::Pipeline(MRCOwned<id<MTLRenderPipelineState>> pipeline,
                           const PipelineReflection& reflection, MTLPrimitiveType prim,
                           MTLCullMode cull, DepthState depth, AbstractPipelineUsage usage)
-    : m_pipeline(std::move(pipeline)), m_prim(prim), m_cull(cull), m_dss(depth), m_usage(usage),
-      m_reflection(reflection)
+    : m_pipeline(std::move(pipeline)), m_prim(prim), m_cull(cull), m_depth_stencil(depth),
+      m_usage(usage), m_reflection(reflection)
 {
 }
 

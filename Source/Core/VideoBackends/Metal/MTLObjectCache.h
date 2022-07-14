@@ -19,23 +19,26 @@ class Shader;
 extern MRCOwned<id<MTLDevice>> g_device;
 extern MRCOwned<id<MTLCommandQueue>> g_queue;
 
-struct DSSSelector
+struct DepthStencilSelector
 {
   u8 value;
 
-  DSSSelector() : value(0) {}
-  DSSSelector(bool zwe, enum CompareMode cmp) : value(zwe | (static_cast<u32>(cmp) << 1)) {}
-  DSSSelector(DepthState state)
-      : DSSSelector(state.testenable ? state.updateenable : false,
-                    state.testenable ? state.func : CompareMode::Always)
+  DepthStencilSelector() : value(0) {}
+  DepthStencilSelector(bool update_enable, enum CompareMode cmp)
+      : value(update_enable | (static_cast<u32>(cmp) << 1))
+  {
+  }
+  DepthStencilSelector(DepthState state)
+      : DepthStencilSelector(state.testenable ? state.updateenable : false,
+                             state.testenable ? state.func : CompareMode::Always)
   {
   }
 
   bool UpdateEnable() const { return value & 1; }
   enum CompareMode CompareMode() const { return static_cast<enum CompareMode>(value >> 1); }
 
-  bool operator==(const DSSSelector& other) { return value == other.value; }
-  bool operator!=(const DSSSelector& other) { return !(*this == other); }
+  bool operator==(const DepthStencilSelector& other) { return value == other.value; }
+  bool operator!=(const DepthStencilSelector& other) { return !(*this == other); }
   static constexpr size_t N_VALUES = 1 << 4;
 };
 
@@ -75,7 +78,7 @@ public:
   static void Initialize(MRCOwned<id<MTLDevice>> device);
   static void Shutdown();
 
-  id<MTLDepthStencilState> GetDSS(DSSSelector sel) { return m_dss[sel.value]; }
+  id<MTLDepthStencilState> GetDepthStencil(DepthStencilSelector sel) { return m_dss[sel.value]; }
 
   id<MTLSamplerState> GetSampler(SamplerSelector sel)
   {
@@ -95,7 +98,7 @@ private:
   class Internal;
   std::unique_ptr<Internal> m_internal;
   MRCOwned<id<MTLSamplerState>> CreateSampler(SamplerSelector sel);
-  MRCOwned<id<MTLDepthStencilState>> m_dss[DSSSelector::N_VALUES];
+  MRCOwned<id<MTLDepthStencilState>> m_dss[DepthStencilSelector::N_VALUES];
   MRCOwned<id<MTLSamplerState>> m_samplers[SamplerSelector::N_VALUES];
 };
 

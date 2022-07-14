@@ -227,7 +227,7 @@ private:
     Util::Viewport viewport;
     MTLDepthClipMode depth_clip_mode;
     MTLCullMode cull_mode;
-    DSSSelector dss;
+    DepthStencilSelector depth_stencil;
     PerfQueryGroup perf_query_group;
   } m_current;
   std::shared_ptr<PerfQueryTracker> m_current_perf_query;
