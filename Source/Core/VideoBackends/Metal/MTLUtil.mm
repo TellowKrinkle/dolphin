@@ -176,19 +176,8 @@ void Metal::Util::PopulateBackendInfoFeatures(VideoConfig* config, id<MTLDevice>
     vendor = DriverDetails::VENDOR_INTEL;
   else if ([[device name] containsString:@"Apple"])
     vendor = DriverDetails::VENDOR_APPLE;
-  double version = 0;
-  if (@available(macOS 13, iOS 16, *))
-    version = 3.0;
-  else if (@available(macOS 12, iOS 15, *))
-    version = 2.4;
-  else if (@available(macOS 11, iOS 14, *))
-    version = 2.3;
-  else if (@available(macOS 10.15, iOS 13, *))
-    version = 2.2;
-  else if (@available(macOS 10.14, iOS 12, *))
-    version = 2.1;
-  else if (@available(macOS 10.13, iOS 11, *))
-    version = 2.0;
+  NSOperatingSystemVersion cocoa_ver = [[NSProcessInfo processInfo] operatingSystemVersion];
+  double version = cocoa_ver.majorVersion * 100 + cocoa_ver.minorVersion;
   DriverDetails::Init(DriverDetails::API_METAL, vendor, DriverDetails::DRIVER_APPLE, version,
                       DriverDetails::Family::UNKNOWN);
 
