@@ -224,62 +224,44 @@ static MTLCullMode Convert(CullMode cull)
   }
 }
 
-static MTLBlendFactor Convert(DstBlendFactor factor, bool src1)
+static MTLBlendFactor Convert(DstBlendFactor factor, bool usedualsrc)
 {
   // clang-format off
-  static constexpr MTLBlendFactor factors[2][8] = {
-    [false] = {
-      [static_cast<int>(DstBlendFactor::Zero)]        = MTLBlendFactorZero,
-      [static_cast<int>(DstBlendFactor::One)]         = MTLBlendFactorOne,
-      [static_cast<int>(DstBlendFactor::SrcClr)]      = MTLBlendFactorSourceColor,
-      [static_cast<int>(DstBlendFactor::InvSrcClr)]   = MTLBlendFactorOneMinusSourceColor,
-      [static_cast<int>(DstBlendFactor::SrcAlpha)]    = MTLBlendFactorSourceAlpha,
-      [static_cast<int>(DstBlendFactor::InvSrcAlpha)] = MTLBlendFactorOneMinusSourceAlpha,
-      [static_cast<int>(DstBlendFactor::DstAlpha)]    = MTLBlendFactorDestinationAlpha,
-      [static_cast<int>(DstBlendFactor::InvDstAlpha)] = MTLBlendFactorOneMinusDestinationAlpha,
-    },
-    [true] = {
-      [static_cast<int>(DstBlendFactor::Zero)]        = MTLBlendFactorZero,
-      [static_cast<int>(DstBlendFactor::One)]         = MTLBlendFactorOne,
-      [static_cast<int>(DstBlendFactor::SrcClr)]      = MTLBlendFactorSourceColor,
-      [static_cast<int>(DstBlendFactor::InvSrcClr)]   = MTLBlendFactorOneMinusSource1Color,
-      [static_cast<int>(DstBlendFactor::SrcAlpha)]    = MTLBlendFactorSource1Alpha,
-      [static_cast<int>(DstBlendFactor::InvSrcAlpha)] = MTLBlendFactorOneMinusSource1Alpha,
-      [static_cast<int>(DstBlendFactor::DstAlpha)]    = MTLBlendFactorDestinationAlpha,
-      [static_cast<int>(DstBlendFactor::InvDstAlpha)] = MTLBlendFactorOneMinusDestinationAlpha,
-    },
-  };
+  switch (factor)
+  {
+  case DstBlendFactor::Zero:        return MTLBlendFactorZero;
+  case DstBlendFactor::One:         return MTLBlendFactorOne;
+  case DstBlendFactor::SrcClr:      return usedualsrc ? MTLBlendFactorSource1Color
+                                                      : MTLBlendFactorSourceColor;
+  case DstBlendFactor::InvSrcClr:   return usedualsrc ? MTLBlendFactorOneMinusSource1Color
+                                                      : MTLBlendFactorOneMinusSourceColor;
+  case DstBlendFactor::SrcAlpha:    return usedualsrc ? MTLBlendFactorSource1Alpha
+                                                      : MTLBlendFactorSourceAlpha;
+  case DstBlendFactor::InvSrcAlpha: return usedualsrc ? MTLBlendFactorOneMinusSource1Alpha
+                                                      : MTLBlendFactorOneMinusSourceAlpha;
+  case DstBlendFactor::DstAlpha:    return MTLBlendFactorDestinationAlpha;
+  case DstBlendFactor::InvDstAlpha: return MTLBlendFactorOneMinusDestinationAlpha;
+  }
   // clang-format on
-  return factors[src1][static_cast<int>(factor)];
 }
 
-static MTLBlendFactor Convert(SrcBlendFactor factor, bool src1)
+static MTLBlendFactor Convert(SrcBlendFactor factor, bool usedualsrc)
 {
   // clang-format off
-  static constexpr MTLBlendFactor factors[2][8] = {
-    [false] = {
-      [static_cast<int>(SrcBlendFactor::Zero)]        = MTLBlendFactorZero,
-      [static_cast<int>(SrcBlendFactor::One)]         = MTLBlendFactorOne,
-      [static_cast<int>(SrcBlendFactor::DstClr)]      = MTLBlendFactorDestinationColor,
-      [static_cast<int>(SrcBlendFactor::InvDstClr)]   = MTLBlendFactorOneMinusDestinationColor,
-      [static_cast<int>(SrcBlendFactor::SrcAlpha)]    = MTLBlendFactorSourceAlpha,
-      [static_cast<int>(SrcBlendFactor::InvSrcAlpha)] = MTLBlendFactorOneMinusSourceAlpha,
-      [static_cast<int>(SrcBlendFactor::DstAlpha)]    = MTLBlendFactorDestinationAlpha,
-      [static_cast<int>(SrcBlendFactor::InvDstAlpha)] = MTLBlendFactorOneMinusDestinationAlpha,
-    },
-    [true] = {
-      [static_cast<int>(SrcBlendFactor::Zero)]        = MTLBlendFactorZero,
-      [static_cast<int>(SrcBlendFactor::One)]         = MTLBlendFactorOne,
-      [static_cast<int>(SrcBlendFactor::DstClr)]      = MTLBlendFactorDestinationColor,
-      [static_cast<int>(SrcBlendFactor::InvDstClr)]   = MTLBlendFactorOneMinusDestinationColor,
-      [static_cast<int>(SrcBlendFactor::SrcAlpha)]    = MTLBlendFactorSource1Alpha,
-      [static_cast<int>(SrcBlendFactor::InvSrcAlpha)] = MTLBlendFactorOneMinusSource1Alpha,
-      [static_cast<int>(SrcBlendFactor::DstAlpha)]    = MTLBlendFactorDestinationAlpha,
-      [static_cast<int>(SrcBlendFactor::InvDstAlpha)] = MTLBlendFactorOneMinusDestinationAlpha,
-    },
-  };
+  switch (factor)
+  {
+  case SrcBlendFactor::Zero:        return MTLBlendFactorZero;
+  case SrcBlendFactor::One:         return MTLBlendFactorOne;
+  case SrcBlendFactor::DstClr:      return MTLBlendFactorDestinationColor;
+  case SrcBlendFactor::InvDstClr:   return MTLBlendFactorOneMinusDestinationColor;
+  case SrcBlendFactor::SrcAlpha:    return usedualsrc ? MTLBlendFactorSource1Alpha
+                                                      : MTLBlendFactorSourceAlpha;
+  case SrcBlendFactor::InvSrcAlpha: return usedualsrc ? MTLBlendFactorOneMinusSource1Alpha
+                                                      : MTLBlendFactorOneMinusSourceAlpha;
+  case SrcBlendFactor::DstAlpha:    return MTLBlendFactorDestinationAlpha;
+  case SrcBlendFactor::InvDstAlpha: return MTLBlendFactorOneMinusDestinationAlpha;
+  }
   // clang-format on
-  return factors[src1][static_cast<int>(factor)];
 }
 
 class Metal::ObjectCache::Internal
