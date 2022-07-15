@@ -39,7 +39,7 @@ void FPSCounter::LogRenderTimeToFile(u64 val)
                       std::ios_base::out);
   }
 
-  m_bench_file << std::fixed << std::setprecision(8) << (val / 1000.0) << std::endl;
+  m_bench_file << fmt::format("{:.3f}", val / 1000.0) << std::endl;
 }
 
 void FPSCounter::Update()
