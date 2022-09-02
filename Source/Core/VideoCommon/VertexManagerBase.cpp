@@ -849,6 +849,7 @@ void VertexManagerBase::OnEFBCopyToRAM()
 
 void VertexManagerBase::OnEndFrame()
 {
+  u32 total_draws = m_draw_counter;
   m_draw_counter = 0;
   m_last_efb_copy_draw_counter = 0;
   m_scheduled_command_buffer_kicks.clear();
@@ -857,6 +858,12 @@ void VertexManagerBase::OnEndFrame()
   // parallelism between CPU/GPU, at the cost of slightly higher latency.
   if (m_cpu_accesses_this_frame.empty())
     return;
+
+  // If most of the rendering happens after the last cpu access (more common with immediately
+  // present EFB off), not cutting up the part at the end will delay the next frame.
+  // e.g. |f1...!CPU!        ......|f2...!CPU!        ......|
+  // vs   |f1...!CPU!........|f2...!CPU!........|
+  m_cpu_accesses_this_frame.push_back(total_draws);
 
   // In order to reduce CPU readback latency, we want to kick a command buffer roughly halfway
   // between the draw counters that invoked the readback, or every 250 draws, whichever is smaller.
@@ -876,6 +883,13 @@ void VertexManagerBase::OnEndFrame()
       {
         u32 mid_point = draw_count / 2;
         m_scheduled_command_buffer_kicks.emplace_back(last_draw_counter + mid_point);
+      }
+      else if (draw_count > interval * 8)
+      {
+        // Some games make a *lot* of draw calls (e.g. TP without Hyrule Field hack makes 27k)
+        // Splitting every 250 draws makes a lot of GPU submissions, so cap it at 8
+        for (u32 i = 1; i < 8; ++i)
+          m_scheduled_command_buffer_kicks.emplace_back(last_draw_counter + i * draw_count / 8);
       }
       else
       {
