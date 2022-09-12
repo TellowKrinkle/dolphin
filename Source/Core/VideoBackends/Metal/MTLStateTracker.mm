@@ -348,6 +348,12 @@ void Metal::StateTracker::FlushEncoders()
           tracker->m_perf_query_tracker_cache.emplace_back(std::move(q));
         }
       }
+      static u8 sample = 0;
+      if (sample++ == 0) {
+        // For some reason (probably a bug), this locks Intel GPUs into their maximum power state if you call it in a completion handler
+        MTLTimestamp cpu, gpu;
+        [g_device sampleTimestamps:&cpu gpuTimestamp:&gpu];
+      }
     }];
   m_current_perf_query = nullptr;
   [m_current_render_cmdbuf commit];
