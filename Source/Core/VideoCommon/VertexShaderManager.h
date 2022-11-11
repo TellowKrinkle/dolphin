@@ -21,6 +21,7 @@ public:
   static void DoState(PointerWrap& p);
 
   // constant management
+  static void SetProjectionMatrix();
   static void SetConstants(const std::vector<std::string>& textures);
 
   static void InvalidateXFRange(int start, int end);
