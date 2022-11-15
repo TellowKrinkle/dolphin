@@ -604,12 +604,18 @@ u8* GetPointer(u32 address)
   // EXRAM?
   address &= 0x3FFFFFFF;
   if (address < GetRamSizeReal())
+  {
+    printf("GetPointer   %08x\n", address);
     return m_pRAM + address;
+  }
 
   if (m_pEXRAM)
   {
     if ((address >> 28) == 0x1 && (address & 0x0fffffff) < GetExRamSizeReal())
+    {
+      printf("GetPointerEx %08x\n", address & GetExRamMask());
       return m_pEXRAM + (address & GetExRamMask());
+    }
   }
 
   PanicAlertFmt("Unknown Pointer {:#010x} PC {:#010x} LR {:#010x}", address, PC, LR);

@@ -458,6 +458,7 @@ void FifoPlayer::WriteFramePart(const FramePart& part, u32* next_mem_update,
     {
       if (data_start < memUpdate.fifoPosition)
       {
+        printf("WriteFifo %08x %08x\n", data_start, memUpdate.fifoPosition);
         WriteFifo(data, data_start, memUpdate.fifoPosition);
         data_start = memUpdate.fifoPosition;
       }
@@ -468,6 +469,7 @@ void FifoPlayer::WriteFramePart(const FramePart& part, u32* next_mem_update,
     }
     else
     {
+      printf("WriteFifo %08x %08x\n", data_start, data_end);
       WriteFifo(data, data_start, data_end);
       data_start = data_end;
     }
@@ -496,9 +498,15 @@ void FifoPlayer::WriteMemory(const MemoryUpdate& memUpdate)
   u8* mem = nullptr;
 
   if (memUpdate.address & 0x10000000)
+  {
+    printf("WriteMemEx %08x\n", memUpdate.address & Memory::GetExRamMask());
     mem = &Memory::m_pEXRAM[memUpdate.address & Memory::GetExRamMask()];
+  }
   else
+  {
+    printf("WriteMem   %08x\n", memUpdate.address & Memory::GetRamMask());
     mem = &Memory::m_pRAM[memUpdate.address & Memory::GetRamMask()];
+  }
 
   std::copy(memUpdate.data.begin(), memUpdate.data.end(), mem);
 }
