@@ -93,3 +93,20 @@ struct SerializedGXUberPipelineUid
 #pragma pack(pop)
 
 }  // namespace VideoCommon
+
+template <>
+struct fmt::formatter<VideoCommon::GXUberPipelineUid>
+{
+  constexpr auto parse(fmt::format_parse_context& ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(const VideoCommon::GXUberPipelineUid& uid, FormatContext& ctx) const
+  {
+    static constexpr Common::EnumMap<std::string_view, CullMode::All> cull_short_names =
+        { "None", "Back", "Front", "All" };
+    return fmt::format_to(ctx.out(),
+        "UberShader Pipeline for {:r}, {:n}, Cull {}, Depth {}, Blend {}",
+        *uid.ps_uid.GetUidData(), uid.rasterization_state.primitive.Value(),
+        cull_short_names[uid.rasterization_state.cullmode], uid.depth_state, uid.blending_state);
+  }
+};

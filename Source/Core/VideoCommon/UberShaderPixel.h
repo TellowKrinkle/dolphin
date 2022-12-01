@@ -39,12 +39,23 @@ void ClearUnusedPixelShaderUidBits(APIType api_type, const ShaderHostConfig& hos
 template <>
 struct fmt::formatter<UberShader::pixel_ubershader_uid_data>
 {
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+  char format_type = 'p';
+
+  constexpr auto parse(fmt::format_parse_context& ctx)
+  {
+    auto it = ctx.begin(), end = ctx.end();
+    // 'p' for pixel, 'r' for the raw contents (used by the ubershader pipeline formatter)
+    if (it != end && (*it == 'p' || *it == 'r'))
+      format_type = *it++;
+    return it;
+  }
+
   template <typename FormatContext>
   auto format(const UberShader::pixel_ubershader_uid_data& uid, FormatContext& ctx) const
   {
+    std::string_view header = format_type == 'p' ? "Pixel UberShader for " : "";
     return fmt::format_to(
-        ctx.out(), "Pixel UberShader for {} texgens{}{}{}{}", uid.num_texgens,
+        ctx.out(), "{}{} texgens{}{}{}{}", header, uid.num_texgens,
         uid.early_depth ? ", early-depth" : "", uid.per_pixel_depth ? ", per-pixel depth" : "",
         uid.uint_output ? ", uint output" : "", uid.no_dual_src ? ", no dual-source blending" : "");
   }

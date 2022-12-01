@@ -161,13 +161,6 @@ std::optional<const AbstractPipeline*> ShaderCache::GetPipelineForUidAsync(const
   return {};
 }
 
-static std::string UberPipelineName(const GXUberPipelineUid& uid)
-{
-  std::string desc = fmt::to_string(*uid.ps_uid.GetUidData());
-  desc.replace(0, strlen("Pixel UberShader"), "UberShader Pipeline");
-  return desc;
-}
-
 const AbstractPipeline* ShaderCache::GetUberPipelineForUid(const GXUberPipelineUid& uid)
 {
   auto it = m_gx_uber_pipeline_cache.find(uid);
@@ -180,7 +173,7 @@ const AbstractPipeline* ShaderCache::GetUberPipelineForUid(const GXUberPipelineU
   {
     u64 begin = Common::Timer::NowUs();
     pipeline = g_renderer->CreatePipeline(*pipeline_config);
-    LogCompileTime(Common::Timer::NowUs() - begin, UberPipelineName(uid));
+    LogCompileTime(Common::Timer::NowUs() - begin, fmt::to_string(uid));
   }
   return InsertGXUberPipeline(uid, std::move(pipeline));
 }
@@ -1282,8 +1275,7 @@ void ShaderCache::QueueUberPipelineCompile(const GXUberPipelineUid& uid, u32 pri
       {
         u64 begin = Common::Timer::NowUs();
         UberPipeline = g_renderer->CreatePipeline(*config);
-        const UberShader::pixel_ubershader_uid_data* data = uid.ps_uid.GetUidData();
-        LogCompileTime(Common::Timer::NowUs() - begin, UberPipelineName(uid));
+        LogCompileTime(Common::Timer::NowUs() - begin, fmt::to_string(uid));
       }
       return true;
     }

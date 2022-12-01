@@ -18,6 +18,12 @@ enum class PrimitiveType : u32
   TriangleStrip,
 };
 
+template <>
+struct fmt::formatter<PrimitiveType> : EnumFormatter<PrimitiveType::TriangleStrip>
+{
+  constexpr formatter() : EnumFormatter({"Points", "Lines", "Triangles", "TriangleStrip"}) {}
+};
+
 union RasterizationState
 {
   void Generate(const BPMemory& bp, PrimitiveType primitive_type);
@@ -102,6 +108,20 @@ union DepthState
   u32 hex;
 };
 
+template <>
+struct fmt::formatter<DepthState>
+{
+  constexpr auto parse(fmt::format_parse_context& ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(const DepthState& blend, FormatContext& ctx) const
+  {
+    if (!blend.testenable)
+      return fmt::format_to(ctx.out(), "None");
+    return fmt::format_to(ctx.out(), "{:n}{}", blend.func, blend.updateenable ? "+Write" : "");
+  }
+};
+
 union BlendingState
 {
   void Generate(const BPMemory& bp);
@@ -144,6 +164,135 @@ union BlendingState
   bool RequiresDualSrc() const;
 
   u32 hex;
+};
+
+template <>
+struct fmt::formatter<BlendingState>
+{
+  constexpr auto parse(fmt::format_parse_context& ctx) { return ctx.begin(); }
+
+  static std::string format_dst_factor(std::string_view base, DstBlendFactor factor, bool dualsrc)
+  {
+    std::string_view one_if_dual_src = dualsrc ? "1" : "";
+    // clang-format off
+    switch (factor)
+    {
+      case DstBlendFactor::Zero:        return "0";
+      case DstBlendFactor::One:         return std::string(base);
+      case DstBlendFactor::SrcClr:      return fmt::format("{}*Cs", base);
+      case DstBlendFactor::InvSrcClr:   return fmt::format("{}*(1-Cs)", base);
+      case DstBlendFactor::SrcAlpha:    return fmt::format("{}*As{}", base, one_if_dual_src);
+      case DstBlendFactor::InvSrcAlpha: return fmt::format("{}*(1-As{})", base, one_if_dual_src);
+      case DstBlendFactor::DstAlpha:    return fmt::format("{}*Ad", base);
+      case DstBlendFactor::InvDstAlpha: return fmt::format("{}*(1-Ad)", base);
+    }
+    // clang-format on
+    return "???";
+  }
+
+  static std::string format_src_factor(std::string_view base, SrcBlendFactor factor, bool dualsrc)
+  {
+    std::string_view one_if_dual_src = dualsrc ? "1" : "";
+    // clang-format off
+    switch (factor)
+    {
+      case SrcBlendFactor::Zero:        return "0";
+      case SrcBlendFactor::One:         return std::string(base);
+      case SrcBlendFactor::DstClr:      return fmt::format("{}*Cd", base);
+      case SrcBlendFactor::InvDstClr:   return fmt::format("{}*(1-Cd)", base);
+      case SrcBlendFactor::SrcAlpha:    return fmt::format("{}*As{}", base, one_if_dual_src);
+      case SrcBlendFactor::InvSrcAlpha: return fmt::format("{}*(1-As{})", base, one_if_dual_src);
+      case SrcBlendFactor::DstAlpha:    return fmt::format("{}*Ad", base);
+      case SrcBlendFactor::InvDstAlpha: return fmt::format("{}*(1-Ad)", base);
+    }
+    // clang-format on
+    return "???";
+  }
+
+  static std::string format_logic_op(std::string_view type, LogicOp op)
+  {
+    static constexpr Common::EnumMap<std::string_view, LogicOp::Set> lookup = {
+      "{0}=0",            // Clear
+      "{0}={0}s&{0}d",    // And
+      "{0}={0}s&~{0}d",   // AndReverse
+      "{0}={0}s",         // Copy
+      "{0}=~{0}s&{0}d",   // AndInverted
+      "{0}={0}d",         // NoOp
+      "{0}={0}s^{0}d",    // Xor
+      "{0}={0}s|{0}d",    // Or
+      "{0}=~({0}s|{0}d)", // Nor
+      "{0}=~({0}s^{0}d)", // Equiv
+      "{0}=~{0}d",        // Invert
+      "{0}={0}s|~{0}d",   // OrReverse
+      "{0}=~{0}s",        // CopyInverted
+      "{0}=~{0}s|{0}d",   // OrInverted
+      "{0}=~({0}s&{0}d)", // Nand
+      "{0}=1",            // Set
+    };
+    return fmt::format(lookup[op], type);
+  }
+
+  template <typename FormatContext>
+  auto format(const BlendingState& blend, FormatContext& ctx) const
+  {
+    auto dst = ctx.out();
+    if (!blend.colorupdate && !blend.alphaupdate)
+    {
+      return fmt::format_to(dst, "All Masked");
+    }
+    else if (blend.blendenable)
+    {
+      if (blend.colorupdate)
+      {
+        if (blend.subtract)
+          dst = fmt::format_to(dst, "C={}-{}",
+                               format_dst_factor("Cd", blend.dstfactor, blend.usedualsrc),
+                               format_src_factor("Cs", blend.srcfactor, blend.usedualsrc));
+        else
+          dst = fmt::format_to(dst, "C={}+{}",
+                               format_src_factor("Cs", blend.srcfactor, blend.usedualsrc),
+                               format_dst_factor("Cd", blend.dstfactor, blend.usedualsrc));
+      }
+      if (blend.alphaupdate)
+      {
+        if (blend.colorupdate)
+          dst = fmt::format_to(dst, ", ");
+        if (blend.subtractAlpha)
+          dst = fmt::format_to(dst, "A={}-{}",
+                               format_dst_factor("Ad", blend.dstfactor, blend.usedualsrc),
+                               format_src_factor("As", blend.srcfactor, blend.usedualsrc));
+        else
+          dst = fmt::format_to(dst, "A={}+{}",
+                               format_src_factor("As", blend.srcfactor, blend.usedualsrc),
+                               format_dst_factor("Ad", blend.dstfactor, blend.usedualsrc));
+      }
+      return dst;
+    }
+    else if (blend.logicopenable)
+    {
+      dst = fmt::format_to(dst, "{:n}", blend.logicmode);
+      if (!blend.alphaupdate)
+        fmt::format_to(dst, "{}", format_logic_op("C", blend.logicmode));
+      else if (!blend.colorupdate)
+        fmt::format_to(dst, "{}", format_logic_op("A", blend.logicmode));
+      else
+        return fmt::format_to(dst, "{}, {}", format_logic_op("C", blend.logicmode),
+                              format_logic_op("A", blend.logicmode));
+    }
+    else if (!blend.colorupdate)
+    {
+      return fmt::format_to(dst, "Mask Color");
+    }
+    else if (!blend.alphaupdate)
+    {
+      return fmt::format_to(dst, "Mask Alpha");
+    }
+    else
+    {
+      return fmt::format_to(dst, "None");
+    }
+    return dst;
+  }
 };
 
 struct SamplerState
