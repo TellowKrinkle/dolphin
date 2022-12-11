@@ -106,7 +106,10 @@ std::unique_ptr<VKTexture> VKTexture::Create(const TextureConfig& tex_config, st
 
   std::unique_ptr<VKTexture> texture = std::make_unique<VKTexture>(
       tex_config, alloc, image, name, VK_IMAGE_LAYOUT_UNDEFINED, ComputeImageLayout::Undefined);
-  if (!texture->CreateView(VK_IMAGE_VIEW_TYPE_2D_ARRAY))
+  const VkImageViewType type = g_ActiveConfig.backend_info.bUsesArrayTextures ?
+                                   VK_IMAGE_VIEW_TYPE_2D_ARRAY :
+                                   VK_IMAGE_VIEW_TYPE_2D;
+  if (!texture->CreateView(type))
     return nullptr;
 
   return texture;

@@ -347,6 +347,11 @@ void VulkanContext::PopulateBackendInfoFeatures(VideoConfig* config, VkPhysicalD
     config->backend_info.bSupportsGSInstancing = VK_FALSE;
   }
 
+  // Some Metal GPUs don't support multisample array textures.
+  // At the moment, the only thing that needs these is stereoscopic 3D, which needs geometry shaders
+  // (which Metal also doesn't have), so disable array textures in that case as well.
+  config->backend_info.bUsesArrayTextures = config->backend_info.bSupportsGeometryShaders;
+
   // Depth clamping implies shaderClipDistance and depthClamp
   config->backend_info.bSupportsDepthClamp =
       (features.depthClamp == VK_TRUE && features.shaderClipDistance == VK_TRUE);
