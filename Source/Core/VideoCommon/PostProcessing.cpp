@@ -496,7 +496,10 @@ std::string PostProcessing::GetHeader() const
 {
   std::ostringstream ss;
   ss << GetUniformBufferHeader();
-  ss << "SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n";
+  if (g_ActiveConfig.backend_info.bUsesArrayTextures)
+    ss << "SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n";
+  else
+    ss << "SAMPLER_BINDING(0) uniform sampler2D samp0;\n";
 
   if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
   {
@@ -511,12 +514,26 @@ std::string PostProcessing::GetHeader() const
 
   ss << "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n";
 
-  ss << R"(
+  if (g_ActiveConfig.backend_info.bUsesArrayTextures)
+  {
+    ss << R"(
 float4 Sample() { return texture(samp0, v_tex0); }
 float4 SampleLocation(float2 location) { return texture(samp0, float3(location, float(v_tex0.z))); }
 float4 SampleLayer(int layer) { return texture(samp0, float3(v_tex0.xy, float(layer))); }
 #define SampleOffset(offset) textureOffset(samp0, v_tex0, offset)
+)";
+  }
+  else
+  {
+    ss << R"(
+float4 Sample() { return texture(samp0, v_tex0.xy); }
+float4 SampleLocation(float2 location) { return texture(samp0, location); }
+float4 SampleLayer(int layer) { return texture(samp0, v_tex0.xy); }
+#define SampleOffset(offset) textureOffset(samp0, v_tex0.xy, offset)
+)";
+  }
 
+  ss << R"(
 float2 GetWindowResolution()
 {
   return window_resolution.xy;

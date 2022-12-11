@@ -209,6 +209,7 @@ struct VideoConfig final
 
     u32 MaxTextureSize = 16384;
     bool bUsesLowerLeftOrigin = false;
+    bool bUsesArrayTextures = true;
 
     bool bSupportsExclusiveFullscreen = false;
     bool bSupportsDualSourceBlend = false;

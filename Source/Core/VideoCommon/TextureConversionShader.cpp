@@ -72,8 +72,9 @@ static void WriteHeader(ShaderCode& code, APIType api_type)
   {
     code.Write("VARYING_LOCATION(0) in float3 v_tex0;\n");
   }
-  code.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n"
-             "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n");
+  code.Write("SAMPLER_BINDING(0) uniform sampler2D{} samp0;\n"
+             "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n",
+             g_ActiveConfig.backend_info.bUsesArrayTextures ? "Array" : "");
 
   // Alpha channel in the copy is set to 1 the EFB format does not have an alpha channel.
   code.Write("float4 RGBA8ToRGB8(float4 src)\n"
@@ -102,7 +103,8 @@ static void WriteHeader(ShaderCode& code, APIType api_type)
 static void WriteSampleFunction(ShaderCode& code, const EFBCopyParams& params, APIType api_type)
 {
   code.Write("uint4 SampleEFB0(float2 uv, float2 pixel_size, float x_offset, float y_offset) {{\n"
-             "  float4 tex_sample = texture(samp0, float3(uv.x + x_offset * pixel_size.x, ");
+             "  float4 tex_sample = texture(samp0, {}(uv.x + x_offset * pixel_size.x, ",
+             g_ActiveConfig.backend_info.bUsesArrayTextures ? "float3" : "float2");
 
   // Reverse the direction for OpenGL, since positive numbers are distance from the bottom row.
   // TODO: This isn't done on TextureConverterShaderGen - maybe it handles that via pixel_size?
@@ -111,7 +113,10 @@ static void WriteSampleFunction(ShaderCode& code, const EFBCopyParams& params, A
   else
     code.Write("clamp(uv.y + y_offset * pixel_size.y, clamp_tb.x, clamp_tb.y)");
 
-  code.Write(", 0.0));\n");
+  if (g_ActiveConfig.backend_info.bUsesArrayTextures)
+    code.Write(", 0.0));\n");
+  else
+    code.Write("));\n");
 
   // TODO: Is this really needed?  Doesn't the EFB only store appropriate values?  Or is this for
   // EFB2Ram having consistent output with force 32-bit color?
@@ -1183,7 +1188,10 @@ float4 DecodePixel(int val)
     ss << "SSBO_BINDING(0) readonly buffer Palette { uint16_t palette[]; };\n";
   else
     ss << "TEXEL_BUFFER_BINDING(0) uniform usamplerBuffer samp0;\n";
-  ss << "SAMPLER_BINDING(1) uniform sampler2DArray samp1;\n";
+  if (g_ActiveConfig.backend_info.bUsesArrayTextures)
+    ss << "SAMPLER_BINDING(1) uniform sampler2DArray samp1;\n";
+  else
+    ss << "SAMPLER_BINDING(1) uniform sampler2D samp1;\n";
   ss << "UBO_BINDING(std140, 1) uniform PSBlock {\n";
 
   ss << "  float multiplier;\n";
@@ -1202,7 +1210,10 @@ float4 DecodePixel(int val)
   }
   ss << "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n";
   ss << "void main() {\n";
-  ss << "  float3 coords = v_tex0;\n";
+  if (g_ActiveConfig.backend_info.bUsesArrayTextures)
+    ss << "  float3 coords = v_tex0;\n";
+  else
+    ss << "  float2 coords = v_tex0.xy;\n";
   ss << "  int src = int(round(texture(samp1, coords).r * multiplier));\n";
   if (api_type == APIType::Metal)
     ss << "  src = int(palette[uint(src)]);\n";

@@ -348,7 +348,10 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType api_type,
             "int3 iround(float3 x) {{ return int3(round(x)); }}\n"
             "int4 iround(float4 x) {{ return int4(round(x)); }}\n\n");
 
-  out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp[8];\n");
+  if (!host_config.backend_no_array_texture)
+    out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp[8];\n");
+  else
+    out.Write("SAMPLER_BINDING(0) uniform sampler2D samp[8];\n");
   out.Write("\n");
 
   out.Write("UBO_BINDING(std140, 1) uniform PSBlock {{\n");
@@ -479,12 +482,24 @@ void UpdateBoundingBox(float2 rawpos) {{
 
   if (host_config.manual_texture_sampling)
   {
-    out.Write(R"(
+    if (!host_config.backend_no_array_texture)
+    {
+      out.Write(R"(
 int4 readTexture(in sampler2DArray tex, uint u, uint v, int layer, int lod) {{
   return iround(texelFetch(tex, int3(u, v, layer), lod) * 255.0);
 }}
 
 int4 readTextureLinear(in sampler2DArray tex, uint2 uv1, uint2 uv2, int layer, int lod, int2 frac_uv) {{)");
+    }
+    else
+    {
+      out.Write(R"(
+int4 readTexture(in sampler2D tex, uint u, uint v, int layer, int lod) {{
+  return iround(texelFetch(tex, int2(u, v), lod) * 255.0);
+}}
+
+int4 readTextureLinear(in sampler2D tex, uint2 uv1, uint2 uv2, int layer, int lod, int2 frac_uv) {{)");
+    }
 
     out.Write(R"(
   int4 result =
@@ -553,13 +568,17 @@ uint WrapCoord(int coord, uint wrap, int size) {{
     }
   }
 
-  out.Write("\nint4 sampleTexture(uint texmap, in sampler2DArray tex, int2 uv, int layer) {{\n");
+  out.Write("\nint4 sampleTexture(uint texmap, in sampler2D{} tex, int2 uv, int layer) {{\n",
+            host_config.backend_no_array_texture ? "" : "Array");
 
   if (!host_config.manual_texture_sampling)
   {
     out.Write("  float size_s = float(" I_TEXDIMS "[texmap].x * 128);\n"
-              "  float size_t = float(" I_TEXDIMS "[texmap].y * 128);\n"
-              "  float3 coords = float3(float(uv.x) / size_s, float(uv.y) / size_t, layer);\n");
+              "  float size_t = float(" I_TEXDIMS "[texmap].y * 128);\n");
+    if (!host_config.backend_no_array_texture)
+      out.Write("  float3 coords = float3(float(uv.x) / size_s, float(uv.y) / size_t, layer);\n");
+    else
+      out.Write("  float2 coords = float2(float(uv.x) / size_s, float(uv.y) / size_t);\n");
     if (!host_config.backend_sampler_lod_bias)
     {
       out.Write("  uint texmode0 = samp_texmode0(texmap);\n"

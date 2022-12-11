@@ -83,11 +83,24 @@ ShaderCode GeneratePixelShader(APIType api_type, const UidData* uid_data)
   ShaderCode out;
   WriteHeader(api_type, out);
 
-  out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n");
-  out.Write("uint4 SampleEFB(float3 uv, float y_offset) {{\n"
-            "  float4 tex_sample = texture(samp0, float3(uv.x, clamp(uv.y + (y_offset * "
-            "pixel_height), clamp_tb.x, clamp_tb.y), {}));\n",
-            mono_depth ? "0.0" : "uv.z");
+  const std::string_view sample_coords =
+      "uv.x, clamp(uv.y + (y_offset * pixel_height), clamp_tb.x, clamp_tb.y)";
+
+  if (g_ActiveConfig.backend_info.bUsesArrayTextures)
+  {
+    out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n");
+    out.Write("uint4 SampleEFB(float3 uv, float y_offset) {{\n"
+              "  float4 tex_sample = texture(samp0, float3({}, {}));\n",
+              sample_coords, mono_depth ? "0.0" : "uv.z");
+  }
+  else
+  {
+    out.Write("SAMPLER_BINDING(0) uniform sampler2D samp0;\n");
+    out.Write("uint4 SampleEFB(float3 uv, float y_offset) {{\n"
+              "  float4 tex_sample = texture(samp0, float2({}));\n",
+              sample_coords);
+  }
+
   if (uid_data->is_depth_copy)
   {
     if (!g_ActiveConfig.backend_info.bSupportsReversedDepthRange)

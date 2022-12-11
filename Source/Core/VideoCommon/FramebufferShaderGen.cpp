@@ -38,7 +38,11 @@ void EmitSamplerDeclarations(ShaderCode& code, u32 start = 0, u32 end = 1,
   case APIType::OpenGL:
   case APIType::Vulkan:
   {
-    const char* array_type = multisampled ? "sampler2DMSArray" : "sampler2DArray";
+    const char* array_type;
+    if (g_ActiveConfig.backend_info.bUsesArrayTextures)
+      array_type = multisampled ? "sampler2DMSArray" : "sampler2DArray";
+    else
+      array_type = multisampled ? "sampler2DMS" : "sampler2D";
 
     for (u32 i = start; i < end; i++)
     {
@@ -53,13 +57,14 @@ void EmitSamplerDeclarations(ShaderCode& code, u32 start = 0, u32 end = 1,
 
 void EmitSampleTexture(ShaderCode& code, u32 n, std::string_view coords)
 {
+  const char* elems = g_ActiveConfig.backend_info.bUsesArrayTextures ? "xyz" : "xy";
   switch (GetAPIType())
   {
   case APIType::D3D:
   case APIType::Metal:
   case APIType::OpenGL:
   case APIType::Vulkan:
-    code.Write("texture(samp{}, {})", n, coords);
+    code.Write("texture(samp{}, ({}).{})", n, coords, elems);
     break;
 
   default:
@@ -71,13 +76,14 @@ void EmitSampleTexture(ShaderCode& code, u32 n, std::string_view coords)
 // containing the layer, and w containing the mipmap level.
 void EmitTextureLoad(ShaderCode& code, u32 n, std::string_view coords)
 {
+  const char* elems = g_ActiveConfig.backend_info.bUsesArrayTextures ? "xyz" : "xy";
   switch (GetAPIType())
   {
   case APIType::D3D:
   case APIType::Metal:
   case APIType::OpenGL:
   case APIType::Vulkan:
-    code.Write("texelFetch(samp{}, ({}).xyz, ({}).w)", n, coords, coords);
+    code.Write("texelFetch(samp{}, ({}).{}, ({}).w)", n, coords, elems, coords);
     break;
 
   default:
@@ -343,10 +349,19 @@ std::string GenerateResolveColorPixelShader(u32 samples)
   ShaderCode code;
   EmitSamplerDeclarations(code, 0, 1, true);
   EmitPixelMainDeclaration(code, 1, 0);
-  code.Write("{{\n"
-             "  int layer = int(v_tex0.z);\n"
-             "  int3 coords = int3(int2(gl_FragCoord.xy), layer);\n"
-             "  ocol0 = float4(0.0f);\n");
+  if (g_ActiveConfig.backend_info.bUsesArrayTextures)
+  {
+    code.Write("{{\n"
+               "  int layer = int(v_tex0.z);\n"
+               "  int3 coords = int3(int2(gl_FragCoord.xy), layer);\n"
+               "  ocol0 = float4(0.0f);\n");
+  }
+  else
+  {
+    code.Write("{{\n"
+               "  int2 coords = int2(gl_FragCoord.xy);\n"
+               "  ocol0 = float4(0.0f);\n");
+  }
   code.Write("  for (int i = 0; i < {}; i++)\n", samples);
   code.Write("    ocol0 += texelFetch(samp0, coords, i);\n");
   code.Write("  ocol0 /= {}.0f;\n", samples);
@@ -359,9 +374,17 @@ std::string GenerateResolveDepthPixelShader(u32 samples)
   ShaderCode code;
   EmitSamplerDeclarations(code, 0, 1, true);
   EmitPixelMainDeclaration(code, 1, 0, "float", "");
-  code.Write("{{\n"
-             "  int layer = int(v_tex0.z);\n");
-  code.Write("  int3 coords = int3(int2(gl_FragCoord.xy), layer);\n");
+  if (g_ActiveConfig.backend_info.bUsesArrayTextures)
+  {
+    code.Write("{{\n"
+               "  int layer = int(v_tex0.z);\n"
+               "  int3 coords = int3(int2(gl_FragCoord.xy), layer);\n");
+  }
+  else
+  {
+    code.Write("{{\n"
+               "  int2 coords = int2(gl_FragCoord.xy);\n");
+  }
 
   // Take the minimum of all depth samples.
   code.Write("  ocol0 = texelFetch(samp0, coords, 0).r;\n");
@@ -421,12 +444,18 @@ std::string GenerateFormatConversionShader(EFBReinterpretType convtype, u32 samp
 {
   ShaderCode code;
   EmitSamplerDeclarations(code, 0, 1, samples > 1);
-  EmitPixelMainDeclaration(code, 1, 0, "float4",
-
-                           "");
-  code.Write("{{\n"
-             "  int layer = int(v_tex0.z);\n");
-  code.Write("  int3 coords = int3(int2(gl_FragCoord.xy), layer);\n");
+  EmitPixelMainDeclaration(code, 1, 0, "float4", "");
+  if (g_ActiveConfig.backend_info.bUsesArrayTextures)
+  {
+    code.Write("{{\n"
+               "  int layer = int(v_tex0.z);\n"
+               "  int3 coords = int3(int2(gl_FragCoord.xy), layer);\n");
+  }
+  else
+  {
+    code.Write("{{\n"
+               "  int2 coords = int2(gl_FragCoord.xy);\n");
+  }
 
   if (samples == 1)
   {
