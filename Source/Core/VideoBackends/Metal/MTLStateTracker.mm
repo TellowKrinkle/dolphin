@@ -120,7 +120,8 @@ Metal::StateTracker::StateTracker() : m_backref(std::make_shared<Backref>(this))
                                                          width:1
                                                         height:1
                                                      mipmapped:NO];
-  [texdesc setTextureType:MTLTextureType2DArray];
+  [texdesc setTextureType:g_ActiveConfig.backend_info.bUsesArrayTextures ? MTLTextureType2DArray :
+                                                                           MTLTextureType2D];
   [texdesc setUsage:MTLTextureUsageShaderRead];
   [texdesc setStorageMode:MTLStorageModePrivate];
   m_dummy_texture = MRCTransfer([g_device newTextureWithDescriptor:texdesc]);

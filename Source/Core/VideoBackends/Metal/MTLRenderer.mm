@@ -41,14 +41,22 @@ bool Metal::Renderer::Initialize()
 
 // MARK: Texture Creation
 
+static constexpr MTLTextureType GetTextureType(bool array, bool multisample)
+{
+  if (array)
+    return multisample ? MTLTextureType2DMultisampleArray : MTLTextureType2DArray;
+  else
+    return multisample ? MTLTextureType2DMultisample : MTLTextureType2D;
+}
+
 std::unique_ptr<AbstractTexture> Metal::Renderer::CreateTexture(const TextureConfig& config,
                                                                 std::string_view name)
 {
   @autoreleasepool
   {
     MRCOwned<MTLTextureDescriptor*> desc = MRCTransfer([MTLTextureDescriptor new]);
-    [desc setTextureType:config.samples > 1 ? MTLTextureType2DMultisampleArray :
-                                              MTLTextureType2DArray];
+    [desc setTextureType:GetTextureType(g_ActiveConfig.backend_info.bUsesArrayTextures,
+                                        config.samples > 1)];
     [desc setPixelFormat:Util::FromAbstract(config.format)];
     [desc setWidth:config.width];
     [desc setHeight:config.height];

@@ -238,6 +238,11 @@ void Metal::Util::PopulateBackendInfoFeatures(VideoConfig* config, id<MTLDevice>
     break;
   }
 
+  // If we ever get a use for array textures that doesn't also require geometry shaders,
+  // this (MSAA array textures) is supported on Apple7 and Mac2.  Until then, just default to off
+  // and save a few instructions in shaders
+  config->backend_info.bUsesArrayTextures = false;
+
   g_features.subgroup_ops = false;
   if (@available(macOS 10.15, iOS 13, *))
   {
