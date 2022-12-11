@@ -122,6 +122,8 @@ ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& 
                             ShaderStage::Geometry);
 
     out.Write("}} ps;\n");
+    if (api_type == APIType::OpenGL)
+      out.Write("flat out int layer;");
 
     out.Write("void main()\n{{\n");
   }
@@ -348,6 +350,8 @@ static void EmitVertex(ShaderCode& out, const ShaderHostConfig& host_config,
     {
       out.Write("\tps.layer = eye;\n");
     }
+    if (api_type == APIType::OpenGL)
+      out.Write("\tlayer = eye;\n");
   }
 
   if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)

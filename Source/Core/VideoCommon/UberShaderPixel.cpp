@@ -135,6 +135,8 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
                             GetInterpolationQualifier(msaa, ssaa, true, true), ShaderStage::Pixel);
 
     out.Write("}};\n\n");
+    if (stereo && api_type == APIType::OpenGL)
+      out.Write("flat in int layer;");
   }
   else
   {
@@ -532,7 +534,9 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
 
   if (host_config.backend_geometry_shaders && stereo)
   {
-    out.Write("\tint layer = gl_Layer;\n");
+    // Passed in as an input on OpenGL
+    if (api_type != APIType::OpenGL)
+      out.Write("\tint layer = gl_Layer;\n");
   }
   else
   {

@@ -885,6 +885,8 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
                             GetInterpolationQualifier(msaa, ssaa, true, true), ShaderStage::Pixel);
 
     out.Write("}};\n");
+    if (stereo && api_type == APIType::OpenGL)
+      out.Write("flat in int layer;");
   }
   else
   {
@@ -942,7 +944,9 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
 
   if (host_config.backend_geometry_shaders && stereo)
   {
-    out.Write("\tint layer = gl_Layer;\n");
+    // Passed in as an input on OpenGL
+    if (api_type != APIType::OpenGL)
+      out.Write("\tint layer = gl_Layer;\n");
   }
   else
   {
