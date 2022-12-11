@@ -348,10 +348,6 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType api_type,
             "int3 iround(float3 x) {{ return int3(round(x)); }}\n"
             "int4 iround(float4 x) {{ return int4(round(x)); }}\n\n");
 
-  if (!host_config.backend_no_array_texture)
-    out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp[8];\n");
-  else
-    out.Write("SAMPLER_BINDING(0) uniform sampler2D samp[8];\n");
   out.Write("\n");
 
   out.Write("UBO_BINDING(std140, 1) uniform PSBlock {{\n");
@@ -752,6 +748,8 @@ uint WrapCoord(int coord, uint wrap, int size) {{
   }
 }
 
+static void WriteSamplers(ShaderCode& out, const pixel_shader_uid_data* uid_data,
+                          const ShaderHostConfig& host_config);
 static void WriteStage(ShaderCode& out, const pixel_shader_uid_data* uid_data, int n,
                        APIType api_type, bool stereo);
 static void WriteTevRegular(ShaderCode& out, std::string_view components, TevBias bias, TevOp op,
@@ -779,12 +777,10 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
   out.Write("// {} TEV stages, {} texgens, {} IND stages\n", numStages,
             uid_data->genMode_numtexgens, uid_data->genMode_numindstages);
 
+  WriteSamplers(out, uid_data, host_config);
   // Stuff that is shared between ubershaders and pixelgen.
   WriteBitfieldExtractHeader(out, api_type, host_config);
   WritePixelShaderCommonHeader(out, api_type, host_config, uid_data->bounding_box);
-
-  out.Write("\n#define sampleTextureWrapper(texmap, uv, layer) "
-            "sampleTexture(texmap, samp[texmap], uv, layer)\n");
 
   if (uid_data->ztest == EmulatedZ::ForcedEarly)
   {
@@ -1028,7 +1024,7 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
       out.Write("\ttempcoord = fixpoint_uv{} >> " I_INDTEXSCALE "[{}].{};\n", texcoord, i / 2,
                 (i & 1) ? "zw" : "xy");
 
-      out.Write("\tint3 iindtex{0} = sampleTextureWrapper({1}u, tempcoord, layer).abg;\n", i,
+      out.Write("\tint3 iindtex{0} = sampleTexture({1}u, samp{1}, tempcoord, layer).abg;\n", i,
                 texmap);
     }
   }
@@ -1180,6 +1176,26 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
   out.Write("}}\n");
 
   return out;
+}
+
+static void WriteSamplers(ShaderCode& out, const pixel_shader_uid_data* uid_data,
+                          const ShaderHostConfig& host_config)
+{
+  BitSet32 used;
+  for (u32 i = 0; i < uid_data->genMode_numtevstages + 1; ++i)
+  {
+    const auto& stage = uid_data->stagehash[i];
+    if (stage.tevorders_enable && uid_data->genMode_numtexgens > 0)
+      used[stage.tevorders_texmap] = true;
+  }
+  for (u32 i = 0; i < uid_data->genMode_numindstages; ++i)
+  {
+    if (uid_data->nIndirectStagesUsed & (1U << i))
+      used[uid_data->GetTevindirefMap(i)] = true;
+  }
+  const char* type = host_config.backend_no_array_texture ? "sampler2D" : "sampler2DArray";
+  for (u32 bit : used)
+    out.Write("SAMPLER_BINDING({0}) uniform {1} samp{0};\n", bit, type);
 }
 
 static void WriteStage(ShaderCode& out, const pixel_shader_uid_data* uid_data, int n,
@@ -1441,8 +1457,8 @@ static void WriteStage(ShaderCode& out, const pixel_shader_uid_data* uid_data, i
   if (stage.tevorders_enable && uid_data->genMode_numtexgens > 0)
   {
     // Generate swizzle string to represent the texture color channel swapping
-    out.Write("\ttextemp = sampleTextureWrapper({}u, tevcoord.xy, layer).{}{}{}{};\n",
-              stage.tevorders_texmap, rgba_swizzle[stage.tex_swap_r],
+    out.Write("\ttextemp = sampleTexture({}u, samp{}, tevcoord.xy, layer).{}{}{}{};\n",
+              stage.tevorders_texmap, stage.tevorders_texmap, rgba_swizzle[stage.tex_swap_r],
               rgba_swizzle[stage.tex_swap_g], rgba_swizzle[stage.tex_swap_b],
               rgba_swizzle[stage.tex_swap_a]);
   }

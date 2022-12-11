@@ -74,6 +74,10 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
              "If you're using framebuffer fetch, you shouldn't need dual source blend!");
 
   out.Write("// {}\n", *uid_data);
+  if (!host_config.backend_no_array_texture)
+    out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp[8];\n");
+  else
+    out.Write("SAMPLER_BINDING(0) uniform sampler2D samp[8];\n");
   WriteBitfieldExtractHeader(out, api_type, host_config);
   WritePixelShaderCommonHeader(out, api_type, host_config, bounding_box);
   if (per_pixel_lighting)
