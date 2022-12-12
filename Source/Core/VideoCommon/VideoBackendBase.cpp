@@ -232,7 +232,11 @@ const std::vector<std::unique_ptr<VideoBackendBase>>& VideoBackendBase::GetAvail
 #ifdef HAS_VULKAN
 #ifdef __APPLE__
     // Emplace the Vulkan backend at the beginning so it takes precedence over OpenGL.
-    backends.emplace(backends.begin(), std::make_unique<Vulkan::VideoBackend>());
+    // Metal backend will return a warning if no Metal GPUs are available (which affects Vulkan too)
+    if (Metal::VideoBackend().GetWarningMessage())
+      backends.emplace_back(std::make_unique<Vulkan::VideoBackend>());
+    else
+      backends.emplace(backends.begin(), std::make_unique<Vulkan::VideoBackend>());
 #else
     backends.push_back(std::make_unique<Vulkan::VideoBackend>());
 #endif

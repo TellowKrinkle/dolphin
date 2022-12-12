@@ -41,7 +41,8 @@ void* AllocateExecutableMemory(size_t size)
 #else
   int map_flags = MAP_ANON | MAP_PRIVATE;
 #if defined(__APPLE__)
-  map_flags |= MAP_JIT;
+  if (__builtin_available(macOS 10.14, *))
+    map_flags |= MAP_JIT;
 #endif
   void* ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE | PROT_EXEC, map_flags, -1, 0);
   if (ptr == MAP_FAILED)
