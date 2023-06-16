@@ -158,6 +158,8 @@ constexpr BugInfo m_known_bugs[] = {
      BUG_BROKEN_DYNAMIC_SAMPLER_INDEXING, -1.0, -1.0, true},
     {API_VULKAN, OS_ANDROID, VENDOR_QUALCOMM, DRIVER_QUALCOMM, Family::UNKNOWN,
      BUG_SLOW_OPTIMAL_IMAGE_TO_BUFFER_COPY, -1.0, -1.0, true},
+    {API_ALL, OS_ALL, VENDOR_ATI, DRIVER_ALL, Family::UNKNOWN, TRAIT_SLOW_16_BIT_UBERSHADERS, -1.0,
+     -1.0, true},
 };
 
 static std::map<Bug, BugInfo> m_bugs;

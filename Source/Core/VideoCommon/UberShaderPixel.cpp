@@ -74,8 +74,34 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
              "If you're using framebuffer fetch, you shouldn't need dual source blend!");
 
   out.Write("// {}\n", *uid_data);
+  if (host_config.backend_prefer_16_bit_ints)
+  {
+    out.Write("#define min16int  int16_t\n"
+              "#define min16int2 i16vec2\n"
+              "#define min16int3 i16vec3\n"
+              "#define min16int4 i16vec4\n"
+              "#define min16uint  uint16_t\n"
+              "#define min16uint2 u16vec2\n"
+              "#define min16uint3 u16vec3\n"
+              "#define min16uint4 u16vec4\n");
+  }
+  else
+  {
+    out.Write("#define min16int  int\n"
+              "#define min16int2 int2\n"
+              "#define min16int3 int3\n"
+              "#define min16int4 int4\n"
+              "#define min16uint  uint\n"
+              "#define min16uint2 uint2\n"
+              "#define min16uint3 uint3\n"
+              "#define min16uint4 uint4\n");
+  }
   WriteBitfieldExtractHeader(out, api_type, host_config);
   WritePixelShaderCommonHeader(out, api_type, host_config, bounding_box);
+  out.Write("min16int  i16round(float  x) {{ return min16int (round(x)); }}\n"
+            "min16int2 i16round(float2 x) {{ return min16int2(round(x)); }}\n"
+            "min16int3 i16round(float3 x) {{ return min16int3(round(x)); }}\n"
+            "min16int4 i16round(float4 x) {{ return min16int4(round(x)); }}\n\n");
   if (per_pixel_lighting)
     WriteLightingFunction(out);
 
@@ -245,13 +271,13 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   {
     // Doesn't look like DirectX supports this. Oh well the code path is here just in case it
     // supports this in the future.
-    out.Write("int4 sampleTextureWrapper(uint texmap, int2 uv, int layer) {{\n");
+    out.Write("float4 sampleTextureWrapper(uint texmap, int2 uv, int layer) {{\n");
     out.Write("  return sampleTexture(texmap, samp[texmap], uv, layer);\n");
     out.Write("}}\n\n");
   }
   else
   {
-    out.Write("int4 sampleTextureWrapper(uint sampler_num, int2 uv, int layer) {{\n"
+    out.Write("float4 sampleTextureWrapper(uint sampler_num, int2 uv, int layer) {{\n"
               "  // This is messy, but DirectX, OpenGL 3.3, and OpenGL ES 3.0 don't support "
               "dynamic indexing of the sampler array\n"
               "  // With any luck the shader compiler will optimise this if the hardware supports "
@@ -269,10 +295,10 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   //   Arbitrary Swizzling
   // ======================
 
-  out.Write("int4 Swizzle(uint s, int4 color) {{\n"
+  out.Write("min16int4 Swizzle(uint s, min16int4 color) {{\n"
             "  // AKA: Color Channel Swapping\n"
             "\n"
-            "  int4 ret;\n");
+            "  min16int4 ret;\n");
   out.Write("  ret.r = color[{}];\n", BitfieldExtract<&TevKSel::swap_rb>("bpmem_tevksel(s * 2u)"));
   out.Write("  ret.g = color[{}];\n", BitfieldExtract<&TevKSel::swap_ga>("bpmem_tevksel(s * 2u)"));
   out.Write("  ret.b = color[{}];\n",
@@ -314,7 +340,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
               "  else\n"
               "    fixedPoint_uv = fixedPoint_uv >> " I_INDTEXSCALE "[{} >> 1].zw;\n"
               "\n"
-              "  {} = sampleTextureWrapper(texmap, fixedPoint_uv, layer).abg;\n"
+              "  {} = iround(sampleTextureWrapper(texmap, fixedPoint_uv, layer)).abg;\n"
               "}}\n",
               in_index_name, in_index_name, in_index_name, in_index_name, out_var_name);
   };
@@ -325,16 +351,16 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   const auto WriteTevLerp = [&out](std::string_view components) {
     out.Write(
         "// TEV's Linear Interpolate, plus bias, add/subtract and scale\n"
-        "int{0} tevLerp{0}(int{0} A, int{0} B, int{0} C, int{0} D, uint bias, bool op, "
-        "uint scale) {{\n"
+        "min16int{0} tevLerp{0}(min16int{0} A, min16int{0} B, min16int{0} C, min16int{0} D,"
+        " uint bias, bool op, uint scale) {{\n"
         " // Scale C from 0..255 to 0..256\n"
         "  C += C >> 7;\n"
         "\n"
         " // Add bias to D\n"
-        "  if (bias == 1u) D += 128;\n"
-        "  else if (bias == 2u) D -= 128;\n"
+        "  if (bias == 1u) D += min16int(128);\n"
+        "  else if (bias == 2u) D -= min16int(128);\n"
         "\n"
-        "  int{0} lerp = (A << 8) + (B - A)*C;\n"
+        "  int{0} lerp = (int{0}(A) << 8) + int{0}(B - A)*int{0}(C);\n"
         "  if (scale != 3u) {{\n"
         "    lerp = lerp << scale;\n"
         "    D = D << scale;\n"
@@ -345,7 +371,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
         "  if (scale != 3u)\n"
         "    lerp = lerp + (op ? 127 : 128);\n"
         "\n"
-        "  int{0} result = lerp >> 8;\n"
+        "  min16int{0} result = min16int{0}(lerp >> 8);\n"
         "\n"
         "  // Add/Subtract D\n"
         "  if (op) // Subtract\n"
@@ -371,21 +397,21 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   out.Write(
       "// Implements operations 0-5 of TEV's compare mode,\n"
       "// which are common to both color and alpha channels\n"
-      "bool tevCompare(uint op, int3 color_A, int3 color_B) {{\n"
+      "bool tevCompare(uint op, min16int3 color_A, min16int3 color_B) {{\n"
       "  switch (op) {{\n"
       "  case 0u: // TevCompareMode::R8, TevComparison::GT\n"
       "    return (color_A.r > color_B.r);\n"
       "  case 1u: // TevCompareMode::R8, TevComparison::EQ\n"
       "    return (color_A.r == color_B.r);\n"
       "  case 2u: // TevCompareMode::GR16, TevComparison::GT\n"
-      "    int A_16 = (color_A.r | (color_A.g << 8));\n"
-      "    int B_16 = (color_B.r | (color_B.g << 8));\n"
+      "    min16uint A_16 = min16uint(color_A.r | (color_A.g << 8));\n"
+      "    min16uint B_16 = min16uint(color_B.r | (color_B.g << 8));\n"
       "    return A_16 > B_16;\n"
       "  case 3u: // TevCompareMode::GR16, TevComparison::EQ\n"
       "    return (color_A.r == color_B.r && color_A.g == color_B.g);\n"
       "  case 4u: // TevCompareMode::BGR24, TevComparison::GT\n"
-      "    int A_24 = (color_A.r | (color_A.g << 8) | (color_A.b << 16));\n"
-      "    int B_24 = (color_B.r | (color_B.g << 8) | (color_B.b << 16));\n"
+      "    int A_24 = (int(min16uint(color_A.r | (color_A.g << 8))) | (int(color_A.b) << 16));\n"
+      "    int B_24 = (int(min16uint(color_B.r | (color_B.g << 8))) | (int(color_B.b) << 16));\n"
       "    return A_24 > B_24;\n"
       "  case 5u: // TevCompareMode::BGR24, TevComparison::EQ\n"
       "    return (color_A.r == color_B.r && color_A.g == color_B.g && color_A.b == color_B.b);\n"
@@ -399,9 +425,9 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   // =================
 
   out.Write("struct State {{\n"
-            "  int4 Reg[4];\n"
-            "  int4 TexColor;\n"
-            "  int AlphaBump;\n"
+            "  min16int4 Reg[4];\n"
+            "  min16int4 TexColor;\n"
+            "  min16int AlphaBump;\n"
             "}};\n"
             "struct StageState {{\n"
             "  uint stage;\n"
@@ -410,8 +436,8 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
             "  uint ac;\n"
             "}};\n"
             "\n"
-            "int4 getRasColor(State s, StageState ss, float4 colors_0, float4 colors_1);\n"
-            "int4 getKonstColor(State s, StageState ss);\n"
+            "min16int4 getRasColor(State s, StageState ss, float4 colors_0, float4 colors_1);\n"
+            "min16int4 getKonstColor(State s, StageState ss);\n"
             "\n");
 
   static constexpr Common::EnumMap<std::string_view, CompareMode::Always> tev_alpha_funcs_table{
@@ -438,10 +464,10 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
       "return s.TexColor.aaa;",                              // TEXA,
       "return getRasColor(s, ss, colors_0, colors_1).rgb;",  // RASC,
       "return getRasColor(s, ss, colors_0, colors_1).aaa;",  // RASA,
-      "return int3(255, 255, 255);",                         // ONE
-      "return int3(128, 128, 128);",                         // HALF
+      "return min16int3(255);",                              // ONE
+      "return min16int3(128);",                              // HALF
       "return getKonstColor(s, ss).rgb;",                    // KONST
-      "return int3(0, 0, 0);",                               // ZERO
+      "return min16int3(0);",                                // ZERO
   };
 
   static constexpr Common::EnumMap<std::string_view, TevAlphaArg::Zero> tev_a_input_table{
@@ -452,7 +478,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
       "return s.TexColor.a;",                              // TEXA,
       "return getRasColor(s, ss, colors_0, colors_1).a;",  // RASA,
       "return getKonstColor(s, ss).a;",                    // KONST,  (hw1 had quarter)
-      "return 0;",                                         // ZERO
+      "return min16int(0);",                               // ZERO
   };
 
   static constexpr Common::EnumMap<std::string_view, TevOutput::Color2> tev_regs_lookup_table{
@@ -481,17 +507,17 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   WriteSwitch(out, api_type, "compare", tev_alpha_funcs_table, 2, false);
   out.Write("}}\n"
             "\n"
-            "int3 selectColorInput(State s, StageState ss, float4 colors_0, float4 colors_1, "
+            "min16int3 selectColorInput(State s, StageState ss, float4 colors_0, float4 colors_1, "
             "uint index) {{\n");
   WriteSwitch(out, api_type, "index", tev_c_input_table, 2, false);
   out.Write("}}\n"
             "\n"
-            "int selectAlphaInput(State s, StageState ss, float4 colors_0, float4 colors_1, "
+            "min16int selectAlphaInput(State s, StageState ss, float4 colors_0, float4 colors_1, "
             "uint index) {{\n");
   WriteSwitch(out, api_type, "index", tev_a_input_table, 2, false);
   out.Write("}}\n"
             "\n"
-            "int4 getTevReg(in State s, uint index) {{\n");
+            "min16int4 getTevReg(in State s, uint index) {{\n");
   WriteSwitch(out, api_type, "index", tev_regs_lookup_table, 2, false);
   out.Write("}}\n"
             "\n");
@@ -544,11 +570,11 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
 
   out.Write("  int3 tevcoord = int3(0, 0, 0);\n"
             "  State s;\n"
-            "  s.TexColor = int4(0, 0, 0, 0);\n"
-            "  s.AlphaBump = 0;\n"
+            "  s.TexColor = min16int4(0);\n"
+            "  s.AlphaBump = min16int(0);\n"
             "\n");
   for (int i = 0; i < 4; i++)
-    out.Write("  s.Reg[{}] = " I_COLORS "[{}];\n", i, i);
+    out.Write("  s.Reg[{}] = min16int4(" I_COLORS "[{}]);\n", i, i);
 
   const char* color_input_prefix = "";
   if (per_pixel_lighting)
@@ -631,8 +657,12 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
     out.Write("      if (bpmem_iref(bt) != 0u) {{\n");
     out.Write("        int3 indcoord;\n");
     LookupIndirectTexture("indcoord", "bt");
-    out.Write("        if (bs != 0u)\n"
-              "          s.AlphaBump = indcoord[bs - 1u];\n"
+    out.Write("        if (bs == 1u)\n"
+              "          s.AlphaBump = min16int(indcoord.x);\n"
+              "        else if (bs == 2u)\n"
+              "          s.AlphaBump = min16int(indcoord.y);\n"
+              "        else if (bs == 3u)\n"
+              "          s.AlphaBump = min16int(indcoord.z);\n"
               "        switch(fmt)\n"
               "        {{\n"
               "        case {:s}:\n",
@@ -640,7 +670,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
     out.Write("          indcoord.x = indcoord.x + ((bias & 1u) != 0u ? -128 : 0);\n"
               "          indcoord.y = indcoord.y + ((bias & 2u) != 0u ? -128 : 0);\n"
               "          indcoord.z = indcoord.z + ((bias & 4u) != 0u ? -128 : 0);\n"
-              "          s.AlphaBump = s.AlphaBump & 0xf8;\n"
+              "          s.AlphaBump = s.AlphaBump & min16int(0xf8);\n"
               "          break;\n"
               "        case {:s}:\n",
               IndTexFormat::ITF_5);
@@ -717,14 +747,15 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
               "    if (texture_enabled) {{\n"
               "      uint sampler_num = {};\n",
               BitfieldExtract<&TwoTevStageOrders::texmap_even>("ss.order"));
-    out.Write("\n"
-              "      int4 color = sampleTextureWrapper(sampler_num, tevcoord.xy, layer);\n"
-              "      uint swap = {};\n",
-              BitfieldExtract<&TevStageCombiner::AlphaCombiner::tswap>("ss.ac"));
+    out.Write(
+        "\n"
+        "      min16int4 color = i16round(sampleTextureWrapper(sampler_num, tevcoord.xy, layer));\n"
+        "      uint swap = {};\n",
+        BitfieldExtract<&TevStageCombiner::AlphaCombiner::tswap>("ss.ac"));
     out.Write("      s.TexColor = Swizzle(swap, color);\n");
     out.Write("    }} else {{\n"
               "      // Texture is disabled\n"
-              "      s.TexColor = int4(255, 255, 255, 255);\n"
+              "      s.TexColor = min16int4(255);\n"
               "    }}\n"
               "\n");
   }
@@ -755,18 +786,18 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   out.Write(
       "      uint color_compare_op = color_scale << 1 | uint(color_op);\n"
       "\n"
-      "      int3 color_A = selectColorInput(s, ss, {0}colors_0, {0}colors_1, color_a) & "
-      "int3(255, 255, 255);\n"
-      "      int3 color_B = selectColorInput(s, ss, {0}colors_0, {0}colors_1, color_b) & "
-      "int3(255, 255, 255);\n"
-      "      int3 color_C = selectColorInput(s, ss, {0}colors_0, {0}colors_1, color_c) & "
-      "int3(255, 255, 255);\n"
-      "      int3 color_D = selectColorInput(s, ss, {0}colors_0, {0}colors_1, color_d);  // 10 "
-      "bits + sign\n"
+      "      min16int3 color_A = selectColorInput(s, ss, {0}colors_0, {0}colors_1, color_a) & "
+      "min16int3(255);\n"
+      "      min16int3 color_B = selectColorInput(s, ss, {0}colors_0, {0}colors_1, color_b) & "
+      "min16int3(255);\n"
+      "      min16int3 color_C = selectColorInput(s, ss, {0}colors_0, {0}colors_1, color_c) & "
+      "min16int3(255);\n"
+      "      min16int3 color_D = selectColorInput(s, ss, {0}colors_0, {0}colors_1, color_d);"
+      "  // 10 bits + sign\n"
       "\n",  // TODO: do we need to sign extend?
       color_input_prefix);
   out.Write(
-      "      int3 color;\n"
+      "      min16int3 color;\n"
       "      if (color_bias != 3u) {{ // Normal mode\n"
       "        color = tevLerp3(color_A, color_B, color_C, color_D, color_bias, color_op, "
       "color_scale);\n"
@@ -774,27 +805,26 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
       "        // op 6 and 7 do a select per color channel\n"
       "        if (color_compare_op == 6u) {{\n"
       "          // TevCompareMode::RGB8, TevComparison::GT\n"
-      "          color.r = (color_A.r > color_B.r) ? color_C.r : 0;\n"
-      "          color.g = (color_A.g > color_B.g) ? color_C.g : 0;\n"
-      "          color.b = (color_A.b > color_B.b) ? color_C.b : 0;\n"
+      "          color.r = (color_A.r > color_B.r) ? color_C.r : min16int(0);\n"
+      "          color.g = (color_A.g > color_B.g) ? color_C.g : min16int(0);\n"
+      "          color.b = (color_A.b > color_B.b) ? color_C.b : min16int(0);\n"
       "        }} else if (color_compare_op == 7u) {{\n"
       "          // TevCompareMode::RGB8, TevComparison::EQ\n"
-      "          color.r = (color_A.r == color_B.r) ? color_C.r : 0;\n"
-      "          color.g = (color_A.g == color_B.g) ? color_C.g : 0;\n"
-      "          color.b = (color_A.b == color_B.b) ? color_C.b : 0;\n"
+      "          color.r = (color_A.r == color_B.r) ? color_C.r : min16int(0);\n"
+      "          color.g = (color_A.g == color_B.g) ? color_C.g : min16int(0);\n"
+      "          color.b = (color_A.b == color_B.b) ? color_C.b : min16int(0);\n"
       "        }} else {{\n"
       "          // The remaining ops do one compare which selects all 3 channels\n"
-      "          color = tevCompare(color_compare_op, color_A, color_B) ? color_C : int3(0, 0, "
-      "0);\n"
+      "          color = tevCompare(color_compare_op, color_A, color_B) ? color_C : min16int3(0);\n"
       "        }}\n"
       "        color = color_D + color;\n"
       "      }}\n"
       "\n"
       "      // Clamp result\n"
       "      if (color_clamp)\n"
-      "        color = clamp(color, 0, 255);\n"
+      "        color = clamp(color, min16int3(0), min16int3(255));\n"
       "      else\n"
-      "        color = clamp(color, -1024, 1023);\n"
+      "        color = clamp(color, min16int3(-1024), min16int3(1023));\n"
       "\n"
       "      // Write result to the correct input register of the next stage\n");
   WriteSwitch(out, api_type, "color_dest", tev_c_set_table, 6, true);
@@ -825,42 +855,46 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   out.Write(
       "      uint alpha_compare_op = alpha_scale << 1 | uint(alpha_op);\n"
       "\n"
-      "      int alpha_A = 0;\n"
-      "      int alpha_B = 0;\n"
+      "      min16int alpha_A = min16int(0);\n"
+      "      min16int alpha_B = min16int(0);\n"
       "      if (alpha_bias != 3u || alpha_compare_op > 5u) {{\n"
       "        // Small optimisation here: alpha_A and alpha_B are unused by compare ops 0-5\n"
-      "        alpha_A = selectAlphaInput(s, ss, {0}colors_0, {0}colors_1, alpha_a) & 255;\n"
-      "        alpha_B = selectAlphaInput(s, ss, {0}colors_0, {0}colors_1, alpha_b) & 255;\n"
+      "        alpha_A = selectAlphaInput(s, ss, {0}colors_0, {0}colors_1, alpha_a)"
+      " & min16int(255);\n"
+      "        alpha_B = selectAlphaInput(s, ss, {0}colors_0, {0}colors_1, alpha_b)"
+      " & min16int(255);\n"
       "      }};\n"
-      "      int alpha_C = selectAlphaInput(s, ss, {0}colors_0, {0}colors_1, alpha_c) & 255;\n"
-      "      int alpha_D = selectAlphaInput(s, ss, {0}colors_0, {0}colors_1, alpha_d); // 10 bits "
-      "+ sign\n"
+      "      min16int alpha_C = selectAlphaInput(s, ss, {0}colors_0, {0}colors_1, alpha_c)"
+      " & min16int(255);\n"
+      "      min16int alpha_D = selectAlphaInput(s, ss, {0}colors_0, {0}colors_1, alpha_d);"
+      "  // 10 bits + sign\n"
       "\n",  // TODO: do we need to sign extend?
       color_input_prefix);
   out.Write("\n"
-            "      int alpha;\n"
+            "      min16int alpha;\n"
             "      if (alpha_bias != 3u) {{ // Normal mode\n"
             "        alpha = tevLerp(alpha_A, alpha_B, alpha_C, alpha_D, alpha_bias, alpha_op, "
             "alpha_scale);\n"
             "      }} else {{ // Compare mode\n"
             "        if (alpha_compare_op == 6u) {{\n"
             "          // TevCompareMode::A8, TevComparison::GT\n"
-            "          alpha = (alpha_A > alpha_B) ? alpha_C : 0;\n"
+            "          alpha = (alpha_A > alpha_B) ? alpha_C : min16int(0);\n"
             "        }} else if (alpha_compare_op == 7u) {{\n"
             "          // TevCompareMode::A8, TevComparison::EQ\n"
-            "          alpha = (alpha_A == alpha_B) ? alpha_C : 0;\n"
+            "          alpha = (alpha_A == alpha_B) ? alpha_C : min16int(0);\n"
             "        }} else {{\n"
             "          // All remaining alpha compare ops actually compare the color channels\n"
-            "          alpha = tevCompare(alpha_compare_op, color_A, color_B) ? alpha_C : 0;\n"
+            "          alpha = tevCompare(alpha_compare_op, color_A, color_B) ? alpha_C"
+            " : min16int(0);\n"
             "        }}\n"
             "        alpha = alpha_D + alpha;\n"
             "      }}\n"
             "\n"
             "      // Clamp result\n"
             "      if (alpha_clamp)\n"
-            "        alpha = clamp(alpha, 0, 255);\n"
+            "        alpha = clamp(alpha, min16int(0), min16int(255));\n"
             "      else\n"
-            "        alpha = clamp(alpha, -1024, 1023);\n"
+            "        alpha = clamp(alpha, min16int(-1024), min16int(1023));\n"
             "\n"
             "      // Write result to the correct input register of the next stage\n");
   WriteSwitch(out, api_type, "alpha_dest", tev_a_set_table, 6, true);
@@ -871,10 +905,10 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   // Select the output color and alpha registers from the last stage.
   out.Write("  int4 TevResult;\n");
   out.Write(
-      "  TevResult.xyz = getTevReg(s, {}).xyz;\n",
+      "  TevResult.xyz = int3(getTevReg(s, {}).xyz);\n",
       BitfieldExtract<&TevStageCombiner::ColorCombiner::dest>("bpmem_combiners(num_stages).x"));
   out.Write(
-      "  TevResult.w = getTevReg(s, {}).w;\n",
+      "  TevResult.w = int(getTevReg(s, {}).w);\n",
       BitfieldExtract<&TevStageCombiner::AlphaCombiner::dest>("bpmem_combiners(num_stages).y"));
 
   out.Write("  TevResult &= 255;\n\n");
@@ -1238,36 +1272,36 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
 
   out.Write("}}\n"
             "\n"
-            "int4 getRasColor(State s, StageState ss, float4 colors_0, float4 colors_1) {{\n"
+            "min16int4 getRasColor(State s, StageState ss, float4 colors_0, float4 colors_1) {{\n"
             "  // Select Ras for stage\n"
             "  uint ras = {};\n",
             BitfieldExtract<&TwoTevStageOrders::colorchan_even>("ss.order"));
   out.Write("  if (ras < 2u) {{ // Lighting Channel 0 or 1\n"
-            "    int4 color = iround(((ras == 0u) ? colors_0 : colors_1) * 255.0);\n"
+            "    min16int4 color = i16round(((ras == 0u) ? colors_0 : colors_1) * 255.0);\n"
             "    uint swap = {};\n",
             BitfieldExtract<&TevStageCombiner::AlphaCombiner::rswap>("ss.ac"));
   out.Write("    return Swizzle(swap, color);\n");
   out.Write("  }} else if (ras == 5u) {{ // Alpha Bump\n"
-            "    return int4(s.AlphaBump, s.AlphaBump, s.AlphaBump, s.AlphaBump);\n"
+            "    return min16int4(s.AlphaBump, s.AlphaBump, s.AlphaBump, s.AlphaBump);\n"
             "  }} else if (ras == 6u) {{ // Normalzied Alpha Bump\n"
-            "    int normalized = s.AlphaBump | s.AlphaBump >> 5;\n"
-            "    return int4(normalized, normalized, normalized, normalized);\n"
+            "    min16int normalized = s.AlphaBump | s.AlphaBump >> 5;\n"
+            "    return min16int4(normalized, normalized, normalized, normalized);\n"
             "  }} else {{\n"
-            "    return int4(0, 0, 0, 0);\n"
+            "    return min16int4(0);\n"
             "  }}\n"
             "}}\n"
             "\n"
-            "int4 getKonstColor(State s, StageState ss) {{\n"
+            "min16int4 getKonstColor(State s, StageState ss) {{\n"
             "  // Select Konst for stage\n"
             "  // TODO: a switch case might be better here than an dynamically"
             "  // indexed uniform lookup\n"
             "  uint tevksel = bpmem_tevksel(ss.stage>>1);\n"
             "  if ((ss.stage & 1u) == 0u)\n"
-            "    return int4(konstLookup[{}].rgb, konstLookup[{}].a);\n",
+            "    return min16int4(int4(konstLookup[{}].rgb, konstLookup[{}].a));\n",
             BitfieldExtract<&TevKSel::kcsel_even>("tevksel"),
             BitfieldExtract<&TevKSel::kasel_even>("tevksel"));
   out.Write("  else\n"
-            "    return int4(konstLookup[{}].rgb, konstLookup[{}].a);\n",
+            "    return min16int4(int4(konstLookup[{}].rgb, konstLookup[{}].a));\n",
             BitfieldExtract<&TevKSel::kcsel_odd>("tevksel"),
             BitfieldExtract<&TevKSel::kasel_odd>("tevksel"));
   out.Write("}}\n");

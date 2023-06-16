@@ -154,6 +154,7 @@ struct VideoConfig final
   bool bBBoxEnable = false;
   bool bForceProgressive = false;
   bool bCPUCull = false;
+  TriState iPrefer16BitUbershaders = TriState::Auto;
 
   bool bEFBEmulateFormatChanges = false;
   bool bSkipEFBCopyToRam = false;
@@ -275,6 +276,7 @@ struct VideoConfig final
     bool bSupportsDynamicVertexLoader = false;
     bool bSupportsVSLinePointExpand = false;
     bool bSupportsGLLayerInFS = true;
+    bool bSupports16BitIntegers = false;
   } backend_info;
 
   // Utility

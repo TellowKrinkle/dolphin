@@ -408,6 +408,7 @@ void VulkanContext::PopulateBackendInfoFeatures(VideoConfig* config, VkPhysicalD
       (features.fragmentStoresAndAtomics == VK_TRUE);
   config->backend_info.bSupportsSSAA = (features.sampleRateShading == VK_TRUE);
   config->backend_info.bSupportsLogicOp = (features.logicOp == VK_TRUE);
+  config->backend_info.bSupports16BitIntegers = (features.shaderInt16 == VK_TRUE);
 
 #ifdef __APPLE__
   // Metal doesn't support this.
@@ -622,6 +623,7 @@ bool VulkanContext::SelectDeviceFeatures()
   m_device_features.samplerAnisotropy = available_features.samplerAnisotropy;
   m_device_features.logicOp = available_features.logicOp;
   m_device_features.fragmentStoresAndAtomics = available_features.fragmentStoresAndAtomics;
+  m_device_features.shaderInt16 = available_features.shaderInt16;
   m_device_features.sampleRateShading = available_features.sampleRateShading;
   m_device_features.largePoints = available_features.largePoints;
   m_device_features.shaderStorageImageMultisample =

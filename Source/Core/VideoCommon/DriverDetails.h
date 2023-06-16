@@ -15,6 +15,7 @@ enum API
   API_OPENGL = (1 << 0),
   API_VULKAN = (1 << 1),
   API_METAL = (1 << 2),
+  API_ALL = API_OPENGL | API_VULKAN | API_METAL,
 };
 
 // Enum of supported operating systems
@@ -340,7 +341,11 @@ enum Bug
   // Affected devices: Adreno
   // Started Version: -1
   // Ended Version: -1
-  BUG_SLOW_OPTIMAL_IMAGE_TO_BUFFER_COPY
+  BUG_SLOW_OPTIMAL_IMAGE_TO_BUFFER_COPY,
+
+  // TRAIT: Ubershaders using 16-bit integers are slower than ones using 32-bit integers
+  // Applicable devices: AMD
+  TRAIT_SLOW_16_BIT_UBERSHADERS
 };
 
 // Initializes our internal vendor, device family, and driver version

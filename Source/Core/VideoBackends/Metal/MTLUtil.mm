@@ -76,6 +76,7 @@ void Metal::Util::PopulateBackendInfo(VideoConfig* config)
   config->backend_info.bSupportsPartialMultisampleResolve = false;
   config->backend_info.bSupportsDynamicVertexLoader = true;
   config->backend_info.bSupportsVSLinePointExpand = true;
+  config->backend_info.bSupports16BitIntegers = true;
 }
 
 void Metal::Util::PopulateBackendInfoAdapters(VideoConfig* config,

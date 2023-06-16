@@ -549,7 +549,7 @@ uint WrapCoord(int coord, uint wrap, int size) {{
     }
   }
 
-  out.Write("\nint4 sampleTexture(uint texmap, in sampler2DArray tex, int2 uv, int layer) {{\n");
+  out.Write("\nfloat4 sampleTexture(uint texmap, in sampler2DArray tex, int2 uv, int layer) {{\n");
 
   if (!host_config.manual_texture_sampling)
   {
@@ -560,12 +560,12 @@ uint WrapCoord(int coord, uint wrap, int size) {{
     {
       out.Write("  uint texmode0 = samp_texmode0(texmap);\n"
                 "  float lod_bias = float({}) / 256.0f;\n"
-                "  return iround(255.0 * texture(tex, coords, lod_bias));\n",
+                "  return 255.0 * texture(tex, coords, lod_bias);\n",
                 BitfieldExtract<&SamplerState::TM0::lod_bias>("texmode0"));
     }
     else
     {
-      out.Write("  return iround(255.0 * texture(tex, coords));\n");
+      out.Write("  return 255.0 * texture(tex, coords);\n");
     }
 
     out.Write("}}\n");
@@ -765,7 +765,7 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
   WritePixelShaderCommonHeader(out, api_type, host_config, uid_data->bounding_box);
 
   out.Write("\n#define sampleTextureWrapper(texmap, uv, layer) "
-            "sampleTexture(texmap, samp[texmap], uv, layer)\n");
+            "iround(sampleTexture(texmap, samp[texmap], uv, layer))\n");
 
   if (uid_data->ztest == EmulatedZ::ForcedEarly)
   {

@@ -96,6 +96,8 @@ const Info<bool> GFX_SAVE_TEXTURE_CACHE_TO_STATE{
 const Info<bool> GFX_PREFER_VS_FOR_LINE_POINT_EXPANSION{
     {System::GFX, "Settings", "PreferVSForLinePointExpansion"}, false};
 const Info<bool> GFX_CPU_CULL{{System::GFX, "Settings", "CPUCull"}, false};
+const Info<TriState> GFX_PREFER_16_BIT_UBERSHADERS{
+    {System::GFX, "Settings", "Prefer16BitUbershaders"}, TriState::Auto};
 
 const Info<TriState> GFX_MTL_MANUALLY_UPLOAD_BUFFERS{
     {System::GFX, "Settings", "ManuallyUploadBuffers"}, TriState::Auto};

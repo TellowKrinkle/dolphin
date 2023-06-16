@@ -8,6 +8,7 @@
 #include "Common/Assert.h"
 #include "Common/FileUtil.h"
 #include "Core/ConfigManager.h"
+#include "VideoCommon/DriverDetails.h"
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/VideoConfig.h"
 
@@ -47,6 +48,13 @@ ShaderHostConfig ShaderHostConfig::GetCurrent()
   bits.backend_dynamic_vertex_loader = g_ActiveConfig.backend_info.bSupportsDynamicVertexLoader;
   bits.backend_vs_point_line_expand = g_ActiveConfig.UseVSForLinePointExpand();
   bits.backend_gl_layer_in_fs = g_ActiveConfig.backend_info.bSupportsGLLayerInFS;
+  bits.backend_prefer_16_bit_ints = g_ActiveConfig.backend_info.bSupports16BitIntegers;
+  if (g_ActiveConfig.iPrefer16BitUbershaders == TriState::Off)
+    bits.backend_prefer_16_bit_ints = false;
+  if (g_ActiveConfig.iPrefer16BitUbershaders == TriState::Auto &&
+      DriverDetails::HasBug(DriverDetails::TRAIT_SLOW_16_BIT_UBERSHADERS))
+    bits.backend_prefer_16_bit_ints = false;
+
   return bits;
 }
 
