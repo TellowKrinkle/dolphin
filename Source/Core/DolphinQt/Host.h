@@ -30,11 +30,11 @@ public:
   bool GetGBAFocus();
 
   void SetMainWindowHandle(void* handle);
-  void SetRenderHandle(void* handle);
   void SetRenderFocus(bool focus);
   void SetRenderFullFocus(bool focus);
   void SetRenderFullscreen(bool fullscreen);
-  void ResizeSurface(int new_width, int new_height);
+  // null new_handle => resize
+  void SetRenderWindowInfo(void* new_handle, int new_width, int new_height, float new_scale);
   void RequestNotifyMapLoaded();
 
 signals:

@@ -27,9 +27,9 @@ public:
 signals:
   void EscapePressed();
   void Closed();
-  void HandleChanged(void* handle);
   void StateChanged(bool fullscreen);
-  void SizeChanged(int new_width, int new_height);
+  // null new_handle => resize only
+  void WindowChanged(void* new_handle, int new_width, int new_height, float new_scale);
   void FocusChanged(bool focus);
 
 private:
