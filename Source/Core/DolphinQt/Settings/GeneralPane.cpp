@@ -89,7 +89,8 @@ void GeneralPane::OnEmulationStateChanged(Core::State state)
   const bool running = state != Core::State::Uninitialized;
 
   m_checkbox_dualcore->setEnabled(!running);
-  m_checkbox_cheats->setEnabled(!running);
+  m_checkbox_cheats->setEnabled(!running && !hardcore);
+  m_checkbox_primehack->setEnabled(!running);
   m_checkbox_override_region_settings->setEnabled(!running);
 #ifdef USE_DISCORD_PRESENCE
   m_checkbox_discord_presence->setEnabled(!running);
@@ -145,6 +146,11 @@ void GeneralPane::CreateBasic()
   m_checkbox_cheats = new ConfigBool(tr("Enable Cheats"), Config::MAIN_ENABLE_CHEATS);
   basic_group_layout->addWidget(m_checkbox_cheats);
 
+
+  m_checkbox_primehack = new ConfigBool(tr("Toggle PrimeHack Controls"), Config::PRIMEHACK_ENABLE);
+  m_checkbox_primehack->setToolTip(QString::fromStdString("Toggle PrimeHack controls on or off. PrimeHack GFX will still work."));
+  basic_group_layout->addWidget(m_checkbox_primehack);
+
   m_checkbox_override_region_settings =
       new ConfigBool(tr("Allow Mismatched Region Settings"), Config::MAIN_OVERRIDE_REGION_SETTINGS);
   basic_group_layout->addWidget(m_checkbox_override_region_settings);
@@ -191,6 +197,8 @@ void GeneralPane::CreateAutoUpdate()
   auto_update_group_layout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
 
   m_combobox_update_track = new ToolTipComboBox();
+  m_combobox_update_track->setEnabled(false);
+  m_combobox_update_track->setToolTip(QString::fromStdString("Disabled by PrimeHack"));
 
   auto_update_group_layout->addRow(tr("&Auto Update:"), m_combobox_update_track);
 
@@ -281,9 +289,9 @@ void GeneralPane::LoadConfig()
     SignalBlocking(m_combobox_fallback_region)->setCurrentIndex(FALLBACK_REGION_NTSCJ_INDEX);
 }
 
-static QString UpdateTrackFromIndex(int index)
-{
-  QString value;
+  static QString UpdateTrackFromIndex(int index)
+  {
+    QString value;
 
   switch (index)
   {

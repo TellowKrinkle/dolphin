@@ -18,6 +18,7 @@
 #include "DolphinQt/Config/ARCodeWidget.h"
 #include "DolphinQt/Config/GeckoCodeWidget.h"
 #include "DolphinQt/QtUtils/PartiallyClosableTabWidget.h"
+#include "DolphinQt/Config/PrimeCheatsWidget.h"
 #include "DolphinQt/Settings.h"
 
 #include "VideoCommon/VideoEvents.h"
@@ -136,6 +137,10 @@ void CheatsManager::CreateWidgets()
   m_cheat_search_new = new CheatSearchFactoryWidget();
   tab_index =
       m_tab_widget->addTab(GetWrappedWidget(m_cheat_search_new), tr("Start New Cheat Search"));
+  m_tab_widget->setTabUnclosable(tab_index);
+  
+  m_primehack_cheats= new PrimeCheatsWidget();
+  tab_index = m_tab_widget->addTab(m_primehack_cheats, tr("PrimeHack"));
   m_tab_widget->setTabUnclosable(tab_index);
 
   auto* layout = new QVBoxLayout;
