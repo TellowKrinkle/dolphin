@@ -105,6 +105,10 @@ struct PairedSingle
 // Paired single must be standard layout in order for offsetof to work, which is used by the JITs
 static_assert(std::is_standard_layout<PairedSingle>(), "PairedSingle must be standard layout");
 
+struct PowerPCState;
+class MMU;
+typedef void(*vm_call)(PowerPCState&, MMU&, u32);
+
 // This contains the entire state of the emulated PowerPC "Gekko" CPU.
 //
 // To minimize code size on x86, we want as much useful stuff in the first 256 bytes as possible.

@@ -38,11 +38,6 @@ namespace
 static std::array<std::atomic<WiimoteSource>, MAX_BBMOTES> s_wiimote_sources;
 static std::optional<Config::ConfigChangedCallbackID> s_config_callback_id = std::nullopt;
 
-WiimoteSource GetSource(unsigned int index)
-{
-  return s_wiimote_sources[index];
-}
-
 void OnSourceChanged(unsigned int index, WiimoteSource source)
 {
   const WiimoteSource previous_source = s_wiimote_sources[index].exchange(source);
@@ -82,7 +77,7 @@ HIDWiimote* GetHIDWiimoteSource(unsigned int index)
 {
   HIDWiimote* hid_source = nullptr;
 
-  WiimoteSource src = GetSource(index);
+  WiimoteSource src = Wiimote::GetSource(index);
   switch (src)
   {
   case WiimoteSource::Emulated:
@@ -365,6 +360,11 @@ std::tuple<double, double, bool, bool, bool, bool, bool> PrimeSettings()
   WiimoteEmu::Wiimote* wiimote = static_cast<WiimoteEmu::Wiimote*>(s_config.GetController(0));
 
   return wiimote->GetPrimeSettings();
+}
+
+WiimoteSource GetSource(unsigned int index)
+{
+  return s_wiimote_sources[index];
 }
 
 bool CheckPitchRecentre()
