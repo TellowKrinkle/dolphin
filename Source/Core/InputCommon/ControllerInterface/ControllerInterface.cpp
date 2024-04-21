@@ -160,7 +160,7 @@ void ControllerInterface::RefreshDevices(RefreshReason reason)
   // device.
 
   // An empty mouse class for when no platform specific one exists.
-  prime::g_mouse_input = new prime::NullMouse();
+  prime::g_mouse_input.reset(new prime::NullMouse());
 
   for (auto& backend : m_input_backends)
     backend->PopulateDevices();
