@@ -407,10 +407,11 @@ void OGLGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool colorEn
     glDepthMask(m_current_depth_state.updateenable);
 }
 
-void OGLGfx::BindBackbuffer(const ClearColor& clear_color)
+bool OGLGfx::BindBackbuffer(const ClearColor& clear_color)
 {
   CheckForSurfaceChange();
   SetAndClearFramebuffer(m_system_framebuffer.get(), clear_color);
+  return true;
 }
 
 void OGLGfx::PresentBackbuffer()
