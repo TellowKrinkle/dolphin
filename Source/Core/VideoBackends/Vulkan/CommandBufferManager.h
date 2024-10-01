@@ -65,9 +65,12 @@ public:
   // swap chain image is ready before the command buffer executes.
   VkSemaphore GetCurrentCommandBufferSemaphore()
   {
-    auto& resources = m_command_buffers[m_current_cmd_buffer];
-    resources.semaphore_used = true;
-    return resources.semaphore;
+    return m_command_buffers[m_current_cmd_buffer].semaphore;
+  }
+
+  void MarkCurrentCommandBufferSemaphoreUsed()
+  {
+    m_command_buffers[m_current_cmd_buffer].semaphore_used = true;
   }
 
   // Ensure that the worker thread has submitted any previous command buffers and is idle.
