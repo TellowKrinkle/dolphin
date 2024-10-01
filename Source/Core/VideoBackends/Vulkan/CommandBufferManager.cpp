@@ -451,6 +451,10 @@ void CommandBufferManager::SubmitCommandBuffer(u32 command_buffer_index,
       {
         LOG_VULKAN_ERROR(m_last_present_result, "vkQueuePresentKHR failed: ");
       }
+      else
+      {
+        INFO_LOG_FMT(VIDEO, "vkQueuePresentKHR returned {}", VkResultToString(m_last_present_result));
+      }
 
       // Don't treat VK_SUBOPTIMAL_KHR as fatal on Android. Android 10+ requires prerotation.
       // See https://twitter.com/Themaister/status/1207062674011574273

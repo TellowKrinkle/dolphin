@@ -315,6 +315,8 @@ bool SwapChain::CreateSwapChain(u32 width, u32 height)
   size.height = std::clamp(size.height, surface_capabilities.minImageExtent.height,
                            surface_capabilities.maxImageExtent.height);
 
+  INFO_LOG_FMT("CreateSwapChain creating new {}x{} swapchain", size.width, size.height);
+
   // Prefer identity transform if possible
   VkSurfaceTransformFlagBitsKHR transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
   if (!(surface_capabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR))
@@ -503,12 +505,15 @@ VkResult SwapChain::AcquireNextImage()
   m_current_swap_chain_image_is_valid = res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR;
   if (res != VK_SUCCESS && res != VK_ERROR_OUT_OF_DATE_KHR && res != VK_SUBOPTIMAL_KHR)
     LOG_VULKAN_ERROR(res, "vkAcquireNextImageKHR failed: ");
+  else
+    INFO_LOG_FMT(VIDEO, "vkAcquireNextImageKHR returned {}", VkResultToString(res));
 
   return res;
 }
 
 bool SwapChain::ResizeSwapChain(u32 width, u32 height)
 {
+  INFO_LOG_FMT(VIDEO, "ResizeSwapChain called with size {}x{}", width, height);
   DestroySwapChainImages();
   if (!CreateSwapChain(width, height) || !SetupSwapChainImages())
   {
@@ -521,6 +526,7 @@ bool SwapChain::ResizeSwapChain(u32 width, u32 height)
 
 bool SwapChain::RecreateSwapChain(u32 width, u32 height)
 {
+  INFO_LOG_FMT(VIDEO, "RecreateSwapChain called with size {}x{}", width, height);
   DestroySwapChainImages();
   DestroySwapChain();
   if (!CreateSwapChain(width, height) || !SetupSwapChainImages())
@@ -578,6 +584,7 @@ bool SwapChain::SetFullscreenState(bool state)
 bool SwapChain::RecreateSurface(void* native_handle, u32 width, u32 height)
 {
   // Destroy the old swap chain, images, and surface.
+  INFO_LOG_FMT(VIDEO, "RecreateSurface called with {} @ {}x{}", native_handle, width, height);
   DestroySwapChainImages();
   DestroySwapChain();
   DestroySurface();
