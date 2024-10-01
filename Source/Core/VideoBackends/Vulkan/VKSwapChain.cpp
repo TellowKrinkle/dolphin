@@ -315,7 +315,7 @@ bool SwapChain::CreateSwapChain(u32 width, u32 height)
   size.height = std::clamp(size.height, surface_capabilities.minImageExtent.height,
                            surface_capabilities.maxImageExtent.height);
 
-  INFO_LOG_FMT("CreateSwapChain creating new {}x{} swapchain", size.width, size.height);
+  INFO_LOG_FMT(VIDEO, "CreateSwapChain creating new {}x{} swapchain", size.width, size.height);
 
   // Prefer identity transform if possible
   VkSurfaceTransformFlagBitsKHR transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
