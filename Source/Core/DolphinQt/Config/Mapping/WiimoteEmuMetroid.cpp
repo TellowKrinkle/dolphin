@@ -69,7 +69,7 @@ void WiimoteEmuMetroid::PopulateMorphBallProfiles()
   m_morphball_combobox->clear();
 
   const std::string profiles_path =
-      File::GetUserPath(D_CONFIG_IDX) + PROFILES_DIR + GetConfig()->GetProfileName();
+      File::GetUserPath(D_CONFIG_IDX) + PROFILES_DIR + GetConfig()->GetProfileKey();
 
   //Add default value
   m_morphball_combobox->addItem(QString::fromStdString(std::string("Disabled")),
@@ -87,7 +87,7 @@ void WiimoteEmuMetroid::PopulateMorphBallProfiles()
   m_morphball_combobox->insertSeparator(m_morphball_combobox->count());
 
   const std::string builtin_profiles_path =
-      File::GetSysDirectory() + PROFILES_DIR + GetConfig()->GetProfileName();
+      File::GetSysDirectory() + PROFILES_DIR + GetConfig()->GetProfileKey();
   for (const auto& filename : Common::DoFileSearch({builtin_profiles_path}, {".ini"}))
   {
     std::string basename;

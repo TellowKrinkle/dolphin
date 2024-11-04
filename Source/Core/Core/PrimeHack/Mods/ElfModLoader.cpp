@@ -52,9 +52,9 @@ auto fold_all_non_null(std::tuple<Ts...> const& tuple)
 }
 
 template <typename T, typename... Args>
-auto resolve_symbols(T&& cb, std::string const& name, Args const&... tnames)
+auto resolve_symbols(T&& cb, PPCSymbolDB& symbolDB, std::string const& name, Args const&... tnames)
     -> std::enable_if_t<all_same<std::string, Args...>::value, bool> {
-  auto symbols = std::make_tuple(g_symbolDB.GetSymbolFromName(name), g_symbolDB.GetSymbolFromName(tnames)...);
+  auto symbols = std::make_tuple(symbolDB.GetSymbolFromName(name), symbolDB.GetSymbolFromName(tnames)...);
   if (fold_all_non_null<0>(symbols)) {
     std::apply(std::forward<T&&>(cb), std::move(symbols));
     return true;
@@ -465,6 +465,7 @@ void ElfModLoader::parse_and_load_modfile(std::string const& path) {
       callgate.callgate_dispatch_fn = callgate_dispatch_fn_sym->address;
       callgate.trampoline_restore_table = trampoline_restore_table_sym->address;
     },
+    symbolDB,
     std::get<0>(*parsed_callgate),
     std::get<1>(*parsed_callgate),
     std::get<2>(*parsed_callgate),
@@ -477,7 +478,7 @@ void ElfModLoader::parse_and_load_modfile(std::string const& path) {
   resolved = resolve_symbols([this] (Symbol* release_fn_sym, Symbol* shutdown_signal_sym) {
       cleanup.release_fn = release_fn_sym->address;
       cleanup.shutdown_signal = shutdown_signal_sym->address;
-    }, std::get<0>(*parsed_cleanup), std::get<1>(*parsed_cleanup));
+    }, symbolDB, std::get<0>(*parsed_cleanup), std::get<1>(*parsed_cleanup));
   if (!resolved) {
     // TODO: log error to user
     return;
@@ -501,7 +502,7 @@ void ElfModLoader::parse_and_load_modfile(std::string const& path) {
         cvar_map[cvar.name] = cvar;
         cvar_map[cvar.name].addr = cvar_sym->address;
         read_cvar(cvar_map[cvar.name]);
-      }, cvar.name);
+      }, symbolDB, cvar.name);
   }
 
   // TODO: check if too many callgate table entries
@@ -509,25 +510,25 @@ void ElfModLoader::parse_and_load_modfile(std::string const& path) {
   for (auto&& [hook_fn, hook_addr] : parsed_vthooks) {
     resolve_symbols([this, hook_addr = hook_addr] (Symbol* hook_sym) {
         create_vthook_callgated(hook_sym->address, hook_addr);
-      }, hook_fn);
+      }, symbolDB, hook_fn);
   }
 
   for (auto&& [hook_fn, hook_addr] : parsed_blhooks) {
     resolve_symbols([this, hook_addr = hook_addr] (Symbol* hook_sym) {
         create_blhook_callgated(hook_sym->address, hook_addr);
-      }, hook_fn);
+      }, symbolDB, hook_fn);
   }
 
   for (auto&& [hook_fn, hook_addr] : parsed_trampolines) {
     resolve_symbols([this, hook_addr = hook_addr] (Symbol* hook_sym) {
         create_trampoline_callgated(hook_sym->address, hook_addr);
-      }, hook_fn);
+      }, symbolDB, hook_fn);
   }
 
   debug_output_addr = 0;
   resolve_symbols([this] (Symbol* debug_out_sym) {
       debug_output_addr = debug_out_sym->address;
-    }, std::string("debug_output"));
+    }, symbolDB, std::string("debug_output"));
 }
 
 bool ElfModLoader::load_elf(std::string const& path) {
@@ -535,8 +536,7 @@ bool ElfModLoader::load_elf(std::string const& path) {
 
   if (elf_file.IsValid()) {
     elf_file.LoadIntoMemory(Core::System::GetInstance(), false);
-    g_symbolDB.Clear();
-    elf_file.LoadSymbols(*active_guard);
+    elf_file.LoadSymbols(*active_guard, symbolDB);
   }
   return elf_file.IsValid();
 }

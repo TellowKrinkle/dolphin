@@ -61,6 +61,7 @@ private:
   } cleanup;
   using cleanup_unresolved = std::tuple<std::string, std::string, u32>;
 
+  PPCSymbolDB symbolDB;
   std::map<std::string, CVar> cvar_map;
   u32 debug_output_addr = 0;
   LoadState load_state = LoadState::NOT_LOADED;

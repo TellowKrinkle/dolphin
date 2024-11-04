@@ -271,7 +271,7 @@ std::pair<std::string, std::string> GetProfiles() {
 
   if (!alt_profname.empty() && (alt_profname != std::string("Disabled"))) {
     alt_profile_path = File::GetUserPath(D_CONFIG_IDX) + PROFILES_DIR +
-                         Wiimote::GetConfig()->GetProfileName() + "/" + group->GetAltProfileName() +
+                         Wiimote::GetConfig()->GetProfileKey() + "/" + group->GetAltProfileName() +
       ".ini";
   } else {
     alt_profile_path = "";

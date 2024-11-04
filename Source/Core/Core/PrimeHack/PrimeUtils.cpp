@@ -258,7 +258,7 @@ static AspectMode get_aspect_mode() {
   if (mode != AspectMode::Stretch) {
     return mode;
   }
-  return Config::Get(Config::GFX_WIDESCREEN_HACK) ? AspectMode::Stretch : AspectMode::AnalogWide;
+  return Config::Get(Config::GFX_WIDESCREEN_HACK) ? AspectMode::Stretch : AspectMode::ForceWide;
 }
 
 static void handle_wiimote_IR(Core::CPUThreadGuard const& guard, u32 x_address, u32 y_address, Region region, float half_width, float half_height, AspectMode mode, float aspect_step) {
@@ -312,7 +312,7 @@ void handle_cursor(Core::CPUThreadGuard const& guard, u32 x_address, u32 y_addre
     const float cur_width = g_presenter->GetBackbufferWidth();
     const float cur_height = g_presenter->GetBackbufferHeight();
     const float render_aspect = cur_width / cur_height;
-    handle_wiimote_IR(guard, x_address, y_address, region, (region == Region::PAL ? kPalHalfHRange : kNtscHalfHRange), kMenuHalfVRange, AspectMode::AnalogWide, render_aspect);
+    handle_wiimote_IR(guard, x_address, y_address, region, (region == Region::PAL ? kPalHalfHRange : kNtscHalfHRange), kMenuHalfVRange, AspectMode::ForceWide, render_aspect);
   } else {
     handle_wiimote_IR(guard, x_address, y_address, region, (region == Region::PAL ? kPalHalfHRange : kNtscHalfHRange), kMenuHalfVRange, aspect_mode, kMetroidAr);
   }
@@ -330,10 +330,10 @@ void handle_reticle(Core::CPUThreadGuard const& guard, u32 x_address, u32 y_addr
   default:
   case AspectMode::Auto:
   case AspectMode::Stretch:
-  case AspectMode::AnalogWide:
+  case AspectMode::ForceWide:
     base_cursor_range_h = (region == Region::PAL ? kPalHalfVRange_16_9 : kNtscHalfVRange_16_9) * fov_scaling;
     break;
-  case AspectMode::Analog:
+  case AspectMode::ForceStandard:
     base_cursor_range_h = (region == Region::PAL ? kPalHalfVRange_4_3 : kNtscHalfVRange_4_3) * fov_scaling;
     break;
   }
