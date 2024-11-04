@@ -237,8 +237,6 @@ struct PowerPCState
   void UpdateFPRFSingle(float fvalue);
 };
 
-typedef void(*vm_call)(PowerPCState&, u32);
-
 #ifdef _M_X86_64
 #ifdef __GNUC__
 #pragma GCC diagnostic push
