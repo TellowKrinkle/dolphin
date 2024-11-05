@@ -35,7 +35,7 @@
 #include "Common/BitUtils.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
-#include "common/FloatUtils.h"
+#include "Common/FloatUtils.h"
 
 #include "Core/Core.h"
 #include "Core/HW/CPU.h"
