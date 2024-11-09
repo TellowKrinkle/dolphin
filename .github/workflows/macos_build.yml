@@ -19,19 +19,14 @@ jobs:
         with:
           submodules: recursive
 
-      # MoltenVK's build process breaks on Python 3.12
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Install Packages
         env:
           HOMEBREW_NO_INSTALL_CLEANUP: 1
           HOMEBREW_NO_ANALYTICS: 1
         run: |
-          if ! brew install ccache; then
+          if ! brew install ccache ninja; then
             brew update
-            brew install ccache
+            brew install ccache ninja
           fi
 
       - name: Cache Dependencies
@@ -65,9 +60,10 @@ jobs:
           git apply ../Externals/MoltenVK/patches/*.patch
           ./fetchDependencies --macos
           make macos
-          chmod 755 Package/Release/MoltenVK/dylib/macOS/libMoltenVK.dylib
+          ls -l Package/Release/MoltenVK/dynamic/*
+          chmod 755 Package/Release/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib
           mkdir -p "$HOME/moltenvk/lib/"
-          mv Package/Release/MoltenVK/dylib/macOS/libMoltenVK.dylib "$HOME/moltenvk/lib/"
+          mv Package/Release/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib "$HOME/moltenvk/lib/"
           popd
           rm -rf mvk-build
 
@@ -98,8 +94,8 @@ jobs:
             -DUSE_SYSTEM_BZIP2=ON
             -DUSE_SYSTEM_CURL=ON
             -DUSE_SYSTEM_ICONV=ON
-            -DUSE_SYSTEM_LIBLZMA=ON
             -DUSE_SYSTEM_SDL2=ON
+            -GNinja
           )
 
           cmake -DCMAKE_OSX_ARCHITECTURES=x86_64 \
@@ -121,7 +117,7 @@ jobs:
           ccache -p
           ccache -s
           ccache -z
-          make -j$(getconf _NPROCESSORS_ONLN) dolphin-emu
+          ninja dolphin-emu
           ccache -s
 
       - name: Build Dolphin (arm64)
@@ -130,7 +126,7 @@ jobs:
           ccache -p
           ccache -s
           ccache -z
-          make -j$(getconf _NPROCESSORS_ONLN) dolphin-emu
+          ninja dolphin-emu
           ccache -s
 
       - name: Prepare Build Artifacts
@@ -141,8 +137,8 @@ jobs:
           PR_NUM: ${{ github.event.pull_request.number }}
           PR_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          lipo -create build/Binaries/Dolphin.app/Contents/MacOS/Dolphin build-arm/Binaries/Dolphin.app/Contents/MacOS/Dolphin -o dolphin
-          mv dolphin build/Binaries/Dolphin.app/Contents/MacOS/Dolphin
+          lipo -create build/Binaries/DolphinQt.app/Contents/MacOS/DolphinQt build-arm/Binaries/DolphinQt.app/Contents/MacOS/DolphinQt -o dolphin
+          mv dolphin build/Binaries/DolphinQt.app/Contents/MacOS/DolphinQt
           TAG="$(git tag --points-at HEAD)"
           if [ ! -z "$TAG" ]; then
             SUFFIX="$TAG"
@@ -154,12 +150,12 @@ jobs:
             SUFFIX="sha[$(git rev-parse --short HEAD)]"
           fi
           APPNAME="PrimeHack-$SUFFIX"
-          mv build/Binaries/Dolphin.app "$APPNAME.app"
-          tar cvzf "$APPNAME.tar.gz" "$APPNAME.app"
+          mv build/Binaries/DolphinQt.app "$APPNAME.app"
+          tar --options xz:compression-level=9 -cvJf "$APPNAME.tar.xz" "$APPNAME.app"
           echo "name=$APPNAME" >> "$GITHUB_OUTPUT"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.create-artifact.outputs.name }}
-          path: "*.tar.gz"
+          path: "*.tar.xz"
