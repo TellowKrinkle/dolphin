@@ -50,6 +50,7 @@
 #include "InputCommon/ControllerEmu/ControlGroup/ModifySettingsButton.h"
 #include "InputCommon/ControllerEmu/ControlGroup/Tilt.h"
 #include "InputCommon/ControllerEmu/ControlGroup/AnalogStick.h"
+#include "InputCommon/ControllerEmu/Control/Input.h"
 
 #include "Core/PrimeHack/HackConfig.h"
 
@@ -851,7 +852,7 @@ void Wiimote::LoadDefaults(const ControllerInterface& ciface)
   m_imu_gyroscope->SetControlExpression(3, "`Android/0/Device Sensors:Gyro Roll Right`");
   m_imu_gyroscope->SetControlExpression(4, "`Android/0/Device Sensors:Gyro Yaw Left`");
   m_imu_gyroscope->SetControlExpression(5, "`Android/0/Device Sensors:Gyro Yaw Right`");
-#else
+
 // Buttons
 #if defined HAVE_X11 && HAVE_X11
   // A

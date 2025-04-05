@@ -7,7 +7,10 @@
 #include <array>
 
 #include "Common/Contains.h"
+
 #include "Core/Config/WiimoteSettings.h"
+#include "Core/Config/GraphicsSettings.h"
+#include "Core/Config/MainSettings.h"
 
 namespace ConfigLoaders
 {

@@ -536,7 +536,7 @@ bool ElfModLoader::load_elf(std::string const& path) {
 
   if (elf_file.IsValid()) {
     elf_file.LoadIntoMemory(Core::System::GetInstance(), false);
-    elf_file.LoadSymbols(*active_guard, symbolDB);
+    elf_file.LoadSymbols(*active_guard, symbolDB, "PrimeHack-Mod");
   }
   return elf_file.IsValid();
 }

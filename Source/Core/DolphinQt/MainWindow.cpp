@@ -1987,7 +1987,7 @@ void MainWindow::ShowTASInput()
   {
     if ((Config::Get(Config::GetInfoForWiimoteSource(i)) == WiimoteSource::Emulated ||
         Config::Get(Config::GetInfoForWiimoteSource(i)) == WiimoteSource::Metroid) &&
-        (!Core::IsRunning(system) || system.IsWii()))
+        (!Core::IsRunning(m_system) || m_system.IsWii()))
     {
       m_wii_tas_input_windows[i]->show();
       m_wii_tas_input_windows[i]->raise();

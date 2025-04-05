@@ -180,7 +180,7 @@ QGroupBox* MappingWidget::CreateGroupBox(const QString& name, ControllerEmu::Con
 
   for (auto& control : group->controls)
   {
-    auto* button = new MappingButton(this, control->control_ref.get(), !indicator);
+    auto* button = new MappingButton(this, control->control_ref.get(), MappingButton::ControlType::NormalInput);
 
     button->setMinimumWidth(100);
     button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
