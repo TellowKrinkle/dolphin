@@ -853,29 +853,6 @@ void Wiimote::LoadDefaults(const ControllerInterface& ciface)
   m_imu_gyroscope->SetControlExpression(4, "`Android/0/Device Sensors:Gyro Yaw Left`");
   m_imu_gyroscope->SetControlExpression(5, "`Android/0/Device Sensors:Gyro Yaw Right`");
 
-// Buttons
-#if defined HAVE_X11 && HAVE_X11
-  // A
-  m_buttons->SetControlExpression(0, "`Click 1`");
-  // B
-  m_buttons->SetControlExpression(1, "`Click 3`");
-#elif defined(__APPLE__)
-  // A
-  m_buttons->SetControlExpression(0, "`Left Click`");
-  // B
-  m_buttons->SetControlExpression(1, "`Right Click`");
-#else
-  // A
-  m_buttons->SetControlExpression(0, "`Click 0`");
-  // B
-  m_buttons->SetControlExpression(1, "`Click 1`");
-#endif
-  // 1 2 - +
-  m_buttons->SetControlExpression(2, "`1`");
-  m_buttons->SetControlExpression(3, "`2`");
-  m_buttons->SetControlExpression(4, "Q");
-  m_buttons->SetControlExpression(5, "E");
-
   // Enable Nunchuk
   constexpr ExtensionNumber DEFAULT_EXT = ExtensionNumber::NUNCHUK;
   m_attachments->SetSelectedAttachment(DEFAULT_EXT);
