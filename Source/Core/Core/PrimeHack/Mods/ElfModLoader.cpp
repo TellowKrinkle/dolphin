@@ -456,10 +456,10 @@ void ElfModLoader::parse_and_load_modfile(std::string const& path) {
   }
 
   bool resolved = resolve_symbols(
-                  [this] (Symbol* callgate_fn_sym,
-                          Symbol* dispatch_table_sym,
-                          Symbol* callgate_dispatch_fn_sym,
-                          Symbol* trampoline_restore_table_sym) {
+                  [this] (Symbol const* callgate_fn_sym,
+                          Symbol const* dispatch_table_sym,
+                          Symbol const* callgate_dispatch_fn_sym,
+                          Symbol const* trampoline_restore_table_sym) {
       callgate.callgate_fn_table = callgate_fn_sym->address;
       callgate.dispatch_table = dispatch_table_sym->address;
       callgate.callgate_dispatch_fn = callgate_dispatch_fn_sym->address;
@@ -475,7 +475,7 @@ void ElfModLoader::parse_and_load_modfile(std::string const& path) {
     return;
   }
 
-  resolved = resolve_symbols([this] (Symbol* release_fn_sym, Symbol* shutdown_signal_sym) {
+  resolved = resolve_symbols([this] (Symbol const* release_fn_sym, Symbol const* shutdown_signal_sym) {
       cleanup.release_fn = release_fn_sym->address;
       cleanup.shutdown_signal = shutdown_signal_sym->address;
     }, symbolDB, std::get<0>(*parsed_cleanup), std::get<1>(*parsed_cleanup));
@@ -498,7 +498,7 @@ void ElfModLoader::parse_and_load_modfile(std::string const& path) {
 
   // TODO: possibly note unfound cvars & hooks (log or OSD)
   for (CVar const& cvar : parsed_cvars) {
-    resolve_symbols([this, &cvar] (Symbol* cvar_sym) {
+    resolve_symbols([this, &cvar] (Symbol const* cvar_sym) {
         cvar_map[cvar.name] = cvar;
         cvar_map[cvar.name].addr = cvar_sym->address;
         read_cvar(cvar_map[cvar.name]);
@@ -508,25 +508,25 @@ void ElfModLoader::parse_and_load_modfile(std::string const& path) {
   // TODO: check if too many callgate table entries
   // should never go over really, but good for clarity
   for (auto&& [hook_fn, hook_addr] : parsed_vthooks) {
-    resolve_symbols([this, hook_addr = hook_addr] (Symbol* hook_sym) {
+    resolve_symbols([this, hook_addr = hook_addr] (Symbol const* hook_sym) {
         create_vthook_callgated(hook_sym->address, hook_addr);
       }, symbolDB, hook_fn);
   }
 
   for (auto&& [hook_fn, hook_addr] : parsed_blhooks) {
-    resolve_symbols([this, hook_addr = hook_addr] (Symbol* hook_sym) {
+    resolve_symbols([this, hook_addr = hook_addr] (Symbol const* hook_sym) {
         create_blhook_callgated(hook_sym->address, hook_addr);
       }, symbolDB, hook_fn);
   }
 
   for (auto&& [hook_fn, hook_addr] : parsed_trampolines) {
-    resolve_symbols([this, hook_addr = hook_addr] (Symbol* hook_sym) {
+    resolve_symbols([this, hook_addr = hook_addr] (Symbol const* hook_sym) {
         create_trampoline_callgated(hook_sym->address, hook_addr);
       }, symbolDB, hook_fn);
   }
 
   debug_output_addr = 0;
-  resolve_symbols([this] (Symbol* debug_out_sym) {
+  resolve_symbols([this] (Symbol const* debug_out_sym) {
       debug_output_addr = debug_out_sym->address;
     }, symbolDB, std::string("debug_output"));
 }

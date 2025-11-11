@@ -20,7 +20,6 @@
 #include "DolphinQt/Config/ConfigControls/ConfigInteger.h"
 #include "DolphinQt/Config/ConfigControls/ConfigRadio.h"
 #include "DolphinQt/Config/ConfigControls/ConfigSlider.h"
-#include "DolphinQt/Config/Graphics/GraphicsWindow.h"
 #include "DolphinQt/Config/ToolTipControls/ToolTipSlider.h"
 #include "DolphinQt/Settings.h"
 
@@ -28,7 +27,7 @@
 #include "Core/PrimeHack/HackConfig.h"
 #include "VideoCommon/VideoConfig.h"
 
-PrimeWidget::PrimeWidget(GraphicsWindow* parent)
+PrimeWidget::PrimeWidget(GraphicsPane* parent)
 {
   CreateWidgets();
   ConnectWidgets();

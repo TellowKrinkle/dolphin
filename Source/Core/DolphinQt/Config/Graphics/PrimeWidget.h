@@ -6,7 +6,7 @@
 
 #include <QWidget>
 
-class GraphicsWindow;
+class GraphicsPane;
 class QCheckBox;
 class QLabel;
 class QRadioButton;
@@ -22,7 +22,7 @@ class QColorDialog;
 class PrimeWidget final : public QWidget {
   Q_OBJECT
 public:
-  explicit PrimeWidget(GraphicsWindow* parent);
+  explicit PrimeWidget(GraphicsPane* parent);
 
 private:
   void ToggleShowCrosshair(bool mode);
