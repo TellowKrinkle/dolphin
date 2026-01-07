@@ -6,7 +6,7 @@ export MACOSX_DEPLOYMENT_TARGET=11.0
 INSTALLDIR="$HOME/deps"
 NPROCS="$(getconf _NPROCESSORS_ONLN)"
 SDL=SDL3-3.4.0
-QT=6.2.10
+QT=6.5.8
 QT_SUFFIX=-opensource
 
 mkdir deps-build
@@ -19,18 +19,18 @@ export CXXFLAGS="-I$INSTALLDIR/include -Os $CXXFLAGS"
 
 cat > SHASUMS <<EOF
 082cbf5f429e0d80820f68dc2b507a94d4cc1b4e70817b119bbb8ec6a69584b8  $SDL.tar.gz
-efbeff5ad6f4d46e82734a681909892401688432fd7ef02c63d2083304d8265c  qtbase-everywhere$QT_SUFFIX-src-$QT.tar.xz
-5e04e4b7699d837c52641310ca386373801a24e8924de7ffcc4b84890431eb38  qtsvg-everywhere$QT_SUFFIX-src-$QT.tar.xz
-62809b242ebcb0e65ac6738f76d005d24c352a8b813128fa3772906ca50cf980  qttools-everywhere$QT_SUFFIX-src-$QT.tar.xz
-57e7cb80d31c32ccbb00bbd7da170970b9effb992970aaf687d4524117aca41e  qttranslations-everywhere$QT_SUFFIX-src-$QT.tar.xz
+5d35f8f37dfb3dff387cce31725b3a363894e3b6ea9d86aa54d9e7fd34e1b888  qtbase-everywhere$QT_SUFFIX-src-$QT.tar.xz
+7bebe5c5b63a6107027beecfa4dc1d8dd4837527040529a4c9d4159844c26061  qtsvg-everywhere$QT_SUFFIX-src-$QT.tar.xz
+1c99dd8d3fd4044866a2d3d569ccd08e25ba28261d494f58b464fcfc18b719a8  qttools-everywhere$QT_SUFFIX-src-$QT.tar.xz
+a9d50b947a4e6eb5c03c9b6b6b2cb4ca9a5db7064efe4bb2957976fe286a4dc0  qttranslations-everywhere$QT_SUFFIX-src-$QT.tar.xz
 EOF
 
 curl -L \
 	-O "https://libsdl.org/release/$SDL.tar.gz" \
-	-O "https://download.qt.io/archive/qt/${QT%.*}/$QT/submodules/qtbase-everywhere$QT_SUFFIX-src-$QT.tar.xz" \
-	-O "https://download.qt.io/archive/qt/${QT%.*}/$QT/submodules/qtsvg-everywhere$QT_SUFFIX-src-$QT.tar.xz" \
-	-O "https://download.qt.io/archive/qt/${QT%.*}/$QT/submodules/qttools-everywhere$QT_SUFFIX-src-$QT.tar.xz" \
-	-O "https://download.qt.io/archive/qt/${QT%.*}/$QT/submodules/qttranslations-everywhere$QT_SUFFIX-src-$QT.tar.xz" \
+	-O "https://download.qt.io/archive/qt/${QT%.*}/$QT/src/submodules/qtbase-everywhere$QT_SUFFIX-src-$QT.tar.xz" \
+	-O "https://download.qt.io/archive/qt/${QT%.*}/$QT/src/submodules/qtsvg-everywhere$QT_SUFFIX-src-$QT.tar.xz" \
+	-O "https://download.qt.io/archive/qt/${QT%.*}/$QT/src/submodules/qttools-everywhere$QT_SUFFIX-src-$QT.tar.xz" \
+	-O "https://download.qt.io/archive/qt/${QT%.*}/$QT/src/submodules/qttranslations-everywhere$QT_SUFFIX-src-$QT.tar.xz" \
 
 shasum -a 256 --check SHASUMS
 
