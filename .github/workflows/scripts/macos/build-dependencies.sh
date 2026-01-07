@@ -5,7 +5,7 @@ set -e
 export MACOSX_DEPLOYMENT_TARGET=11.0
 INSTALLDIR="$HOME/deps"
 NPROCS="$(getconf _NPROCESSORS_ONLN)"
-SDL=SDL2-2.30.9
+SDL=SDL3-3.4.0
 QT=6.2.10
 QT_SUFFIX=-opensource
 
@@ -18,7 +18,7 @@ export CFLAGS="-I$INSTALLDIR/include -Os $CFLAGS"
 export CXXFLAGS="-I$INSTALLDIR/include -Os $CXXFLAGS"
 
 cat > SHASUMS <<EOF
-24b574f71c87a763f50704bbb630cbe38298d544a1f890f099a4696b1d6beba4  $SDL.tar.gz
+082cbf5f429e0d80820f68dc2b507a94d4cc1b4e70817b119bbb8ec6a69584b8  $SDL.tar.gz
 efbeff5ad6f4d46e82734a681909892401688432fd7ef02c63d2083304d8265c  qtbase-everywhere$QT_SUFFIX-src-$QT.tar.xz
 5e04e4b7699d837c52641310ca386373801a24e8924de7ffcc4b84890431eb38  qtsvg-everywhere$QT_SUFFIX-src-$QT.tar.xz
 62809b242ebcb0e65ac6738f76d005d24c352a8b813128fa3772906ca50cf980  qttools-everywhere$QT_SUFFIX-src-$QT.tar.xz
@@ -37,9 +37,9 @@ shasum -a 256 --check SHASUMS
 echo "Installing SDL..."
 tar xf "$SDL.tar.gz"
 cd "$SDL"
-CC="clang -arch x86_64 -arch arm64" ./configure --prefix "$INSTALLDIR" --without-x
-make "-j$NPROCS"
-make install
+cmake -B build -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DCMAKE_PREFIX_PATH="$INSTALLDIR" -DCMAKE_INSTALL_PREFIX="$INSTALLDIR" -DCMAKE_BUILD_TYPE=MinSizeRel -DSDL_X11=OFF
+make -C build "-j$NPROCS"
+make -C build install
 cd ..
 
 echo "Installing Qt Base..."
